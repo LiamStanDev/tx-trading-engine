@@ -192,7 +192,7 @@ class [[nodiscard]] Result {
   [[nodiscard]] auto map(Fn fn) && -> Result<std::invoke_result_t<Fn, T>, E> {
     using U = std::invoke_result_t<Fn, T>;
 
-    if (is_ok()) {
+    if (is_ok()) [[likely]] {
       return Ok<U>(fn(std::move(*this).value()));
     }
     return Err<E>(std::move(*this).error());
@@ -207,7 +207,7 @@ class [[nodiscard]] Result {
     requires std::invocable<Fn, T> && IsResult<std::invoke_result_t<Fn, T>> &&
              std::same_as<typename std::invoke_result_t<Fn, T>::error_type, E>
   {
-    if (is_ok()) {
+    if (is_ok()) [[likely]] {
       return fn(std::move(*this).value());
     }
     return Err<E>(std::move(*this).error());
@@ -225,7 +225,7 @@ class [[nodiscard]] Result {
   {
     using F = std::invoke_result_t<Fn, E>;
 
-    if (is_err()) {
+    if (is_err()) [[unlikely]] {
       return Err<F>(fn(std::move(*this).error()));
     }
     return Ok<T>(std::move(*this).value());
@@ -303,7 +303,7 @@ class [[nodiscard]] Result<void, E> {
   {
     using F = std::invoke_result_t<Fn, E>;
 
-    if (is_err()) {
+    if (is_err()) [[unlikely]] {
       return Err<F>(fn(std::move(*this).error()));
     }
     return Ok<void>();
