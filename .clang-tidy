@@ -1,0 +1,91 @@
+# 已關閉的檢查說明 (不要在 Checks 中加上註解)：
+#   - readability-identifier-length: 允許短變數名（如 i, j, fd）
+#   - readability-magic-numbers: 允許字面常數
+#   - modernize-use-trailing-return-type: 不強制使用 trailing return type
+#   - cppcoreguidelines-pro-bounds-pointer-arithmetic: 允許指標運算（網路/IPC 需要）
+#   - cppcoreguidelines-pro-type-reinterpret-cast: 允許 reinterpret_cast（底層操作需要）
+#   - readability-function-cognitive-complexity: 不限制函式複雜度
+#   - bugprone-easily-swappable-parameters: 不檢查參數順序
+
+Checks: >
+  bugprone-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  portability-*,
+  concurrency-*,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -modernize-use-auto,
+  -modernize-use-trailing-return-type,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-member-init
+  -readability-function-cognitive-complexity,
+  -bugprone-easily-swappable-parameters
+
+# 將警告視為錯誤（強制修正）
+WarningsAsErrors: "*"
+HeaderFilterRegex: ".*/(tx-common|tx-engine)/include/.*"
+CheckOptions:
+  # 命名規範（根據您的專案風格調整）
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.MemberCase
+    value: lower_case
+  - key: readability-identifier-naming.PrivateMemberSuffix
+    value: "_"
+  - key: readability-identifier-naming.ConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.ConstexprVariableCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.EnumConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.TemplateParameterCase
+    value: CamelCase
+
+  # 效能相關
+  - key: performance-move-const-arg.CheckTriviallyCopyableMove
+    value: "false"
+  - key: performance-unnecessary-value-param.AllowedTypes
+    value: "std::function;std::shared_ptr"
+
+  # 可讀性
+  - key: readability-braces-around-statements.ShortStatementLines
+    value: "1"
+  - key: readability-simplify-boolean-expr.ChainedConditionalReturn
+    value: "true"
+  - key: readability-simplify-boolean-expr.ChainedConditionalAssignment
+    value: "true"
+  - key: readability-identifier-length.IgnoredVariableNames
+    value: "fd|i|j|k|n|m|id|ok|ev" # 允許這些短變數名稱
+  - key: readability-identifier-length.MinimumVariableNameLength
+    value: "3"
+
+  # 現代化
+  - key: modernize-use-nullptr.NullMacros
+    value: "NULL"
+  - key: modernize-loop-convert.MinConfidence
+    value: "reasonable"
+
+  # C++ Core Guidelines
+  - key: cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
+    value: "true"
+  - key: cppcoreguidelines-avoid-do-while.IgnoreMacros
+    value: "true"

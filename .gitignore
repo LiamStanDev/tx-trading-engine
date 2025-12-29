@@ -1,31 +1,116 @@
-# Build directories
+# =========================
+# 建置產物
+# =========================
 build/
+build-*/
 cmake-build-*/
+install/
+# CMake 快取與產物
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+*.cmake
+# 編譯產物
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
 
-# IDE
+# =========================
+# IDE 與編輯器
+# =========================
+# Visual Studio Code
 .vscode/
+*.code-workspace
+# CLion / IntelliJ
 .idea/
+cmake-build-*/
+# Vim
 *.swp
 *.swo
 *~
-
-# Compiled files
-*.o
-*.so
-*.a
-*.exe
-
-# Cache
-.cache/
-
-# Test outputs
-Testing/
-*.log
-
-# Benchmark results
-benchmark_results/
-*.json
-
-# OS
+.*.swp
+# Emacs
+*~
+\#*\#
+.\#*
+# macOS
 .DS_Store
-Thumbs.db
+.AppleDouble
+.LSOverride
+
+# =========================
+# 開發工具
+# =========================
+# compile_commands.json（軟連結，實體在 build/ 內）
+compile_commands.json
+# ccache
+.ccache/
+# CPM.cmake 快取（通常在 ~/.cache/CPM）
+.cache/
+# clangd 快取
+.clangd/
+
+# =========================
+# 測試與除錯
+# =========================
+# Google Test 產物
+Testing/
+CTestTestfile.cmake
+# 覆蓋率報告
+*.gcda
+*.gcno
+*.gcov
+coverage.info
+coverage-html/
+coverage-filtered.info
+# Sanitizers 報告
+*.asan
+*.tsan
+*.ubsan
+# Valgrind 報告
+*.valgrind
+vgcore.*
+# Core dumps
+core
+core.*
+
+# =========================
+# 文件與日誌
+# =========================
+*.log
+*.out
+
+# =========================
+# 套件管理器
+# =========================
+# Conan
+conan.lock
+conanbuildinfo.*
+conaninfo.txt
+graph_info.json
+# vcpkg
+vcpkg_installed/
+
+# =========================
+# 其他
+# =========================
+# 暫存檔案
+*.tmp
+*.temp
+*.bak
+# 壓縮檔
+*.zip
+*.tar
+*.tar.gz
+*.7z
+# 編譯器快取
+*.pch
+*.gch
+# 效能分析
+*.perf
+perf.data*

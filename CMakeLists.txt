@@ -32,8 +32,23 @@ option(TX_BUILD_BENCHMARKS "Build benchmarks" ON)
 option(TX_ENABLE_WARNINGS "Enable compiler warnings" ON)
 option(TX_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 option(TX_ENABLE_LTO "Enable Link Time Optimization" ON)
-option(TX_ENABLE_ASAN "Enable AddressSanitizer" ON)
-option(TX_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" ON)
+option(TX_ENABLE_CCACHE "Use ccache if available" ON)
+
+# Sanitizers
+if(CMAKE_BUILD_TYPE MATCHES "^(Debug|RelWithDebInfo)$")
+  option(TX_ENABLE_ASAN "Enable AddressSanitizer" ON)
+  option(TX_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" ON)
+  option(TX_ENABLE_TSAN "Enable ThreadSanitizer (mutually exclusive with ASAN)" OFF)
+else()
+  option(TX_ENABLE_ASAN "Enable AddressSanitizer" OFF)
+  option(TX_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+  option(TX_ENABLE_TSAN "Enable ThreadSanitizer (mutually exclusive with ASAN)" OFF)
+endif()
+
+# Sanitizers 互斥檢查
+if(TX_ENABLE_ASAN AND TX_ENABLE_TSAN)
+  message(FATAL_ERROR "AddressSanitizer and ThreadSanitizer are mutually exclusive. Please enable only one.")
+endif()
 
 # =========================
 # 全局設定
@@ -49,6 +64,20 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # =========================
+# ccache 支援
+# =========================
+if(TX_ENABLE_CCACHE)
+  find_program(CCACHE_PROGRAM ccache)
+  if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    message(STATUS "Using ccache: ${CCACHE_PROGRAM}")
+  else()
+    message(STATUS "ccache not found")
+  endif()
+endif()
+
+# =========================
 # 編譯器選項 Interface Library
 # =========================
 add_library(tx-compiler-options INTERFACE)
@@ -61,8 +90,26 @@ target_compile_features(tx-compiler-options INTERFACE cxx_std_20)
 if(TX_ENABLE_WARNINGS)
   target_compile_options(tx-compiler-options INTERFACE
     -Wall -Wextra
-    -Wconversion -Wsign-conversion  # 隱式轉換
-    -Wshadow                        # 變數遮蔽
+    # 數值與轉型安全
+    -Wconversion        # 包含部分隱式轉換檢查
+    -Wsign-conversion   # 有符號與無符號轉換（交易系統常見 Bug 來源）
+    -Wdouble-promotion  # 防止 float 被意外提升到 double（影響效能）
+    -Wold-style-cast    # 強制使用 C++ 風格轉型，便於搜索代碼中的轉換
+    -Wuseless-cast      # 檢查代碼冗餘
+    -Wcast-align        # 指標對齊檢查，對處理 SHM 結構至關重要
+
+    # 邏輯與結構安全
+    -Wshadow            # 防止變數遮蔽，減少維護隱患
+    -Wnon-virtual-dtor  # 多載解構子安全性
+    -Woverloaded-virtual # 虛擬函式隱藏檢查
+    -Wnull-dereference  # 靜態分析空指標風險（GCC 6+）
+    -Wlogical-op        # 檢查邏輯運算子誤用
+
+    # 程式碼重複與品質
+    -Wduplicated-cond   # 重複的 if 條件 (GCC 6+)
+    -Wduplicated-branches # 重複的代碼分支 (GCC 7+)
+    -Wmisleading-indentation # 縮排誤導檢查 (GCC 6+)
+    -Wformat=2          # 更嚴格的 printf 格式檢查
     $<$<BOOL:${TX_WARNINGS_AS_ERRORS}>:-Werror>
   )
 endif()
@@ -73,28 +120,39 @@ target_compile_options(tx-compiler-options INTERFACE
   $<$<CONFIG:Debug>: -g3 -Og -fno-omit-frame-pointer
     $<$<BOOL:${TX_ENABLE_ASAN}>:-fsanitize=address -fno-omit-frame-pointer>
     $<$<BOOL:${TX_ENABLE_UBSAN}>:-fsanitize=undefined>
+    $<$<BOOL:${TX_ENABLE_TSAN}>:-fsanitize=thread>
   >
-
-  # Release + LTO
+  # Release + 優化
   # -march=x86-64-v2  # 支持 SSE4.2, POPCNT (2008+)
   # -march=x86-64-v3  # 支持 AVX2, BMI2 (2013+)
   # -march=x86-64-v4  # 支持 AVX512 (2017+)
-  # -flto=auto        # 多執行序 LTO
-  $<$<CONFIG:Release>: -O3 -march=native -DNDEBUG
-    $<$<BOOL:${TX_ENABLE_LTO}>:-flto=auto>
-  >
+  $<$<CONFIG:Release>: -O3 -march=native -DNDEBUG>
 )
-
-# 鏈接選項（LTO 和 Sanitizers 都需要）
+# 鏈接選項（Sanitizers 和 LTO）
 target_link_options(tx-compiler-options INTERFACE
   $<$<CONFIG:Debug>:
     $<$<BOOL:${TX_ENABLE_ASAN}>:-fsanitize=address>
     $<$<BOOL:${TX_ENABLE_UBSAN}>:-fsanitize=undefined>
-  >
-  $<$<CONFIG:Release>:
-    $<$<BOOL:${TX_ENABLE_LTO}>:-flto=auto>
+    $<$<BOOL:${TX_ENABLE_TSAN}>:-fsanitize=thread>
   >
 )
+
+# =========================
+# Link Time Optimization (LTO)
+# =========================
+if(TX_ENABLE_LTO)
+  # 檢查 LTO 支持
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+  if(ipo_supported)
+    # 設定全局預設值（所有 target 都會繼承）
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    message(STATUS "LTO/IPO enabled for Release builds (global)")
+  else()
+    message(WARNING "LTO not supported: ${ipo_error}")
+    set(TX_ENABLE_LTO OFF CACHE BOOL "LTO not supported" FORCE)
+  endif()
+endif()
 
 # =========================
 # 第三方依賴
@@ -140,6 +198,24 @@ endif()
 # =========================
 add_subdirectory(tx-common)
 
+# =========================
+# compile_commands.json 軟連結
+# =========================
+# 自動將 compile_commands.json 放到項目根目錄
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+  # 取得原始路徑與目標路徑
+  set(SOURCE_JSON "${CMAKE_BINARY_DIR}/compile_commands.json")
+  set(TARGET_JSON "${CMAKE_SOURCE_DIR}/compile_commands.json")
+
+  # 在 Configure 階段直接執行，而不是等待編譯
+  if(NOT EXISTS "${TARGET_JSON}" OR IS_SYMLINK "${TARGET_JSON}")
+    execute_process(
+      COMMAND ${CMAKE_COMMAND} -E create_symlink "${SOURCE_JSON}" "${TARGET_JSON}"
+      RESULT_VARIABLE symlink_res
+    )
+  endif()
+endif()
+
 
 # =========================
 # 專案資訊輸出
@@ -156,8 +232,10 @@ message(STATUS "  Build Benchmarks: ${TX_BUILD_BENCHMARKS}")
 message(STATUS "  Enable Warnings: ${TX_ENABLE_WARNINGS}")
 message(STATUS "  Warnings as Errors: ${TX_WARNINGS_AS_ERRORS}")
 message(STATUS "  Enable LTO: ${TX_ENABLE_LTO}")
+message(STATUS "  Enable ccache: ${TX_ENABLE_CCACHE}")
 message(STATUS "  Enable AddressSanitizer: ${TX_ENABLE_ASAN}")
 message(STATUS "  Enable UndefinedBehaviorSanitizer: ${TX_ENABLE_UBSAN}")
+message(STATUS "  Enable ThreadSanitizer: ${TX_ENABLE_TSAN}")
 message(STATUS "----------------------------------------")
 message(STATUS "CPM Cache: $ENV{CPM_SOURCE_CACHE}")
 message(STATUS "========================================")

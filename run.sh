@@ -259,6 +259,15 @@ show_usage() {
   bench [build-type] [...args]
       執行效能測試（預設: release）
       
+  format [check|fix]
+      代碼格式化檢查/修正（預設: check）
+      
+  lint [build-type]
+      靜態代碼分析（clang-tidy）
+      
+  coverage
+      代碼覆蓋率分析（需要 lcov）
+      
   clean [build-type|all]
       清理建置目錄
       
@@ -281,36 +290,25 @@ Flags:
   ${SCRIPT_NAME} build debug
       # 建置 debug 版本
       
-  ${SCRIPT_NAME} build release clean
-      # 清理後建置 release 版本
+  ${SCRIPT_NAME} format check
+      # 檢查代碼格式
       
-  ${SCRIPT_NAME} build debug -DUSE_ASAN=ON
-      # 建置 debug 並啟用 Address Sanitizer
+  ${SCRIPT_NAME} format fix
+      # 自動修正代碼格式
       
-  ${SCRIPT_NAME} test debug
-      # 執行 debug 測試
+  ${SCRIPT_NAME} lint debug
+      # 執行靜態代碼分析
+      
+  ${SCRIPT_NAME} coverage
+      # 生成代碼覆蓋率報告
       
   ${SCRIPT_NAME} test debug verbose
       # 執行測試（詳細模式）
       
-  ${SCRIPT_NAME} test debug Price*
-      # 只執行符合 Price* 的測試
-      
-  ${SCRIPT_NAME} bench release
-      # 執行 release 效能測試
-      
   ${SCRIPT_NAME} bench release --filter=Price
       # 只執行符合 Price 的 benchmark
-      
-  ${SCRIPT_NAME} clean debug
-      # 清理 build/debug/
-      
-  ${SCRIPT_NAME} install release
-      # 安裝 release 版本
 配置檔:
   可在專案根目錄建立 run.config 自定義配置
-  
-專案: https://github.com/yourusername/yourproject
 EOF
 }
 
@@ -381,10 +379,10 @@ cmd_build() {
 
   "${cmake_cmd[@]}" || log_fatal "CMake 配置失敗"
 
-  # 生成 compile_commands.json 軟連結
-  if [[ -f "${build_dir}/compile_commands.json" ]]; then
-    ln -sf "${build_dir}/compile_commands.json" . 2>/dev/null || true
-  fi
+  # # 生成 compile_commands.json 軟連結
+  # if [[ -f "${build_dir}/compile_commands.json" ]]; then
+  #   ln -sf "${build_dir}/compile_commands.json" . 2>/dev/null || true
+  # fi
 
   # 執行建置
   log_info "開始編譯（使用 $(get_cpu_cores) 個 CPU 核心）..."
@@ -667,20 +665,411 @@ cmd_install() {
 }
 
 ################################################################################
+# format 命令實作
+################################################################################
+cmd_format() {
+  local mode="${1:-check}" # check / fix
+
+  if [[ "${mode}" != "check" ]] && [[ "${mode}" != "fix" ]]; then
+    log_error "無效的模式: ${mode}"
+    log_info "有效模式: check, fix"
+    exit 1
+  fi
+
+  log_header "代碼格式化" "${LOG_COLOR_CYAN}"
+  log_info "模式: ${mode}"
+  echo ""
+
+  # 檢查 clang-format 是否存在
+  if ! command -v clang-format &>/dev/null; then
+    log_fatal "clang-format 未安裝，請先安裝：sudo apt install clang-format"
+  fi
+
+  # 檢查 .clang-format 是否存在
+  if [[ ! -f "${SCRIPT_DIR}/.clang-format" ]]; then
+    log_warn ".clang-format 配置檔不存在"
+  fi
+
+  if [[ "${DRY_RUN}" == true ]]; then
+    log_info "[DRY-RUN] 將執行格式化檢查/修正: ${mode}"
+    return
+  fi
+
+  # 尋找所有 C++ 檔案
+  log_info "搜尋 C++ 檔案..."
+  local files
+  files=$(find "${SCRIPT_DIR}" -type f \
+    \( -name "*.cpp" -o -name "*.hpp" -o -name "*.h" -o -name "*.cc" \) \
+    ! -path "*/build/*" \
+    ! -path "*/.cache/*" \
+    ! -path "*/cmake-build-*/*" \
+    2>/dev/null)
+
+  if [[ -z "${files}" ]]; then
+    log_warn "找不到 C++ 檔案"
+    exit 0
+  fi
+
+  local file_count
+  file_count=$(echo "${files}" | wc -l)
+  log_info "找到 ${file_count} 個檔案"
+  echo ""
+
+  if [[ "${mode}" == "fix" ]]; then
+    log_info "正在格式化代碼..."
+    echo "${files}" | xargs clang-format -i -style=file
+    log_success "格式化完成！"
+  else
+    log_info "檢查代碼格式..."
+
+    local has_issues=false
+    local issue_count=0
+
+    while IFS= read -r file; do
+      local diff_output
+      diff_output=$(clang-format -style=file "${file}" | diff -u "${file}" - || true)
+
+      if [[ -n "${diff_output}" ]]; then
+        if [[ "${has_issues}" == false ]]; then
+          log_separator "=" 50 "${LOG_COLOR_YELLOW}"
+          log_warn "發現格式問題："
+          log_separator "=" 50 "${LOG_COLOR_YELLOW}"
+          has_issues=true
+        fi
+
+        echo ""
+        log_error "檔案: ${file}"
+        echo "${diff_output}"
+        ((issue_count++))
+      fi
+    done <<<"${files}"
+
+    echo ""
+
+    if [[ "${has_issues}" == true ]]; then
+      log_separator "=" 50 "${LOG_COLOR_RED}"
+      log_error "共發現 ${issue_count} 個檔案有格式問題"
+      log_separator "=" 50 "${LOG_COLOR_RED}"
+      log_info "執行以下命令自動修正："
+      log_info "  ${SCRIPT_NAME} format fix"
+      exit 1
+    else
+      log_separator "=" 50 "${LOG_COLOR_GREEN}"
+      log_success "所有檔案格式正確！"
+      log_separator "=" 50 "${LOG_COLOR_GREEN}"
+    fi
+  fi
+}
+
+################################################################################
+# lint 命令實作
+################################################################################
+cmd_lint() {
+  local build_type="${1:-debug}"
+  local mode="${2:-3}" # 數字 = 顯示 N 個檔案，verbose = 全部
+  local build_dir="${BUILD_DIR_PREFIX}/${build_type}"
+
+  log_header "靜態代碼分析" "${LOG_COLOR_CYAN}"
+  log_info "建置類型: ${build_type}"
+  log_info "建置目錄: ${build_dir}"
+
+  # 1. 檢查建置目錄與編譯資料庫
+  if [[ ! -f "${build_dir}/compile_commands.json" ]]; then
+    log_error "找不到 compile_commands.json，請先執行 build"
+    exit 1
+  fi
+
+  # 2. 尋找 run-clang-tidy 執行檔
+  local tidy_bin
+  tidy_bin=$(command -v run-clang-tidy 2>/dev/null ||
+    command -v run-clang-tidy.py 2>/dev/null ||
+    command -v run-clang-tidy-15 2>/dev/null)
+
+  if [[ -z "${tidy_bin}" ]]; then
+    log_fatal "找不到 run-clang-tidy，請安裝: sudo apt install clang-tidy"
+  fi
+
+  if [[ "${DRY_RUN}" == true ]]; then
+    log_info "[DRY-RUN] 將執行靜態分析"
+    return
+  fi
+
+  log_info "使用 ${tidy_bin} 開始分析..."
+  echo ""
+
+  local start_time=$(date +%s)
+
+  # 3. 執行分析，捕獲輸出
+  local output
+  local exit_code=0
+  output=$("${tidy_bin}" \
+    -p "${build_dir}" \
+    -j "$(nproc)" \
+    -quiet \
+    "tx-common/.*\.cpp$" 2>&1) || exit_code=$?
+
+  local end_time=$(date +%s)
+  local duration=$((end_time - start_time))
+
+  # 4. 統計錯誤數量
+  local total_errors
+  total_errors=$(echo "${output}" | grep -c "error:\|warning:" || echo "0")
+
+  # 5. 如果沒有錯誤，直接返回成功
+  if [[ ${total_errors} -eq 0 ]]; then
+    log_separator "=" 50 "${LOG_COLOR_GREEN}"
+    log_success "靜態分析通過！(耗時: ${duration}s)"
+    log_separator "=" 50 "${LOG_COLOR_GREEN}"
+    return
+  fi
+
+  # 6. 顯示錯誤（根據模式）
+  if [[ "${mode}" == "verbose" ]] || [[ "${mode}" == "all" ]]; then
+    # ============================================
+    # 詳細模式：顯示所有錯誤
+    # ============================================
+    log_separator "=" 50 "${LOG_COLOR_RED}"
+    log_error "發現 ${total_errors} 個問題（顯示全部）"
+    log_separator "=" 50 "${LOG_COLOR_RED}"
+    echo ""
+    echo "${output}"
+    echo ""
+    log_separator "=" 50 "${LOG_COLOR_RED}"
+    log_error "請修正上述 ${total_errors} 個問題"
+    log_separator "=" 50 "${LOG_COLOR_RED}"
+  else
+    # ============================================
+    # 摘要模式：只顯示前 N 個檔案的錯誤
+    # ============================================
+    local max_files="${mode}"
+    local errors_per_file=5
+
+    # 按檔案分組統計錯誤數量（只統計有檔案路徑的錯誤）
+    local error_summary
+    error_summary=$(echo "${output}" |
+      grep -E "^/" |
+      grep -E "error:|warning:" |
+      sed 's/:.*//;s/^[[:space:]]*//' |
+      sort | uniq -c | sort -rn |
+      head -n "${max_files}")
+
+    if [[ -z "${error_summary}" ]]; then
+      # 沒有檔案相關的錯誤，但有總錯誤數，可能都是編譯器警告
+      log_separator "=" 50 "${LOG_COLOR_YELLOW}"
+      log_warn "發現 ${total_errors} 個問題（主要是編譯器警告）"
+      log_separator "=" 50 "${LOG_COLOR_YELLOW}"
+      echo ""
+      echo "${output}" | grep -E "error:|warning:" | head -n 20
+      echo ""
+      if [[ ${total_errors} -gt 20 ]]; then
+        log_info "... 還有 $((total_errors - 20)) 個問題未顯示"
+      fi
+      log_info "執行 './run.sh lint ${build_type} verbose' 查看完整輸出"
+      exit 1
+    fi
+
+    log_separator "=" 50 "${LOG_COLOR_YELLOW}"
+    log_warn "發現 ${total_errors} 個問題，優先修正以下檔案："
+    log_separator "=" 50 "${LOG_COLOR_YELLOW}"
+    echo ""
+
+    # 顯示每個檔案的錯誤
+    local file_index=0
+    while IFS= read -r line; do
+      file_index=$((file_index + 1))
+      local count=$(echo "${line}" | awk '{print $1}')
+      local file=$(echo "${line}" | awk '{$1=""; print $0}' | sed 's/^[[:space:]]*//')
+
+      log_warn "[${file_index}/${max_files}] ${file}: ${count} 個問題"
+      echo ""
+
+      # 顯示該檔案的前 N 個錯誤（加 || true 防止 set -e 退出）
+      echo "${output}" | grep "^${file}:" | head -n "${errors_per_file}" || true
+
+      # 如果錯誤數量超過顯示數量，提示還有更多
+      if [[ ${count} -gt ${errors_per_file} ]]; then
+        echo "  ... 還有 $((count - errors_per_file)) 個問題未顯示"
+      fi
+      echo ""
+    done <<<"${error_summary}"
+
+    # 提示訊息
+    log_separator "-" 50
+    log_info "提示："
+    log_info "  - 建議先修正上述 ${max_files} 個檔案"
+    log_info "  - 修正後重新執行檢查進度"
+    echo ""
+    log_info "查看選項："
+    log_info "  - 查看更多檔案: ./run.sh lint ${build_type} 5"
+    log_info "  - 查看所有問題: ./run.sh lint ${build_type} verbose"
+    log_separator "=" 50 "${LOG_COLOR_RED}"
+    log_error "分析耗時: ${duration}s"
+    log_separator "=" 50 "${LOG_COLOR_RED}"
+  fi
+
+  exit 1
+}
+
+################################################################################
+# coverage 命令實作
+################################################################################
+cmd_coverage() {
+  local build_type="debug"
+  local build_dir="${BUILD_DIR_PREFIX}/${build_type}-coverage"
+
+  log_header "代碼覆蓋率分析" "${LOG_COLOR_MAGENTA}"
+  log_info "建置目錄: ${build_dir}"
+  echo ""
+
+  # 檢查必要工具
+  if ! command -v lcov &>/dev/null; then
+    log_fatal "lcov 未安裝，請先安裝：sudo apt install lcov"
+  fi
+
+  if [[ "${DRY_RUN}" == true ]]; then
+    log_info "[DRY-RUN] 將執行覆蓋率分析"
+    return
+  fi
+
+  # 清理舊的覆蓋率資料
+  if [[ -d "${build_dir}" ]]; then
+    log_info "清理舊的覆蓋率資料..."
+    find "${build_dir}" -name "*.gcda" -delete 2>/dev/null || true
+  fi
+
+  # 建置覆蓋率版本
+  log_separator "-" 50
+  log_info "建置覆蓋率版本..."
+  log_separator "-" 50
+
+  check_command cmake
+
+  local cmake_build_type
+  cmake_build_type=$(get_cmake_build_type "${build_type}")
+
+  cmake \
+    -B "${build_dir}" \
+    -DCMAKE_BUILD_TYPE="${cmake_build_type}" \
+    -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+    -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+    -DTX_ENABLE_ASAN=OFF \
+    -DTX_ENABLE_UBSAN=OFF \
+    -DTX_ENABLE_TSAN=OFF \
+    -G "${CMAKE_GENERATOR}" ||
+    log_fatal "CMake 配置失敗"
+
+  cmake --build "${build_dir}" -j "$(get_cpu_cores)" ||
+    log_fatal "編譯失敗"
+
+  # 執行測試
+  echo ""
+  log_separator "-" 50
+  log_info "執行測試..."
+  log_separator "-" 50
+
+  ctest --test-dir "${build_dir}" --output-on-failure ||
+    log_warn "部分測試失敗（但會繼續生成覆蓋率報告）"
+
+  # 生成覆蓋率報告
+  echo ""
+  log_separator "-" 50
+  log_info "生成覆蓋率報告..."
+  log_separator "-" 50
+
+  # 捕獲基線覆蓋率（顯示所有編譯的代碼）
+  log_info "捕獲基線覆蓋率..."
+  lcov --capture --initial \
+    --directory "${build_dir}" \
+    --output-file "${build_dir}/coverage-base.info" \
+    --exclude '/usr/*' \
+    --exclude '*/_deps/*' \
+    --rc branch_coverage=1 \
+    --ignore-errors mismatch,inconsistent,deprecated,corrupt,negative,empty \
+    2>&1 | grep -v "^lcov: WARNING:" ||
+    log_fatal "基線捕獲失敗"
+
+  # 捕獲測試執行後的覆蓋率
+  log_info "捕獲測試覆蓋率..."
+  lcov --capture \
+    --directory "${build_dir}" \
+    --output-file "${build_dir}/coverage-test.info" \
+    --exclude '/usr/*' \
+    --exclude '*/_deps/*' \
+    --rc branch_coverage=1 \
+    --ignore-errors mismatch,inconsistent,deprecated,corrupt,negative,empty \
+    2>&1 | grep -v "^lcov: WARNING:" ||
+    log_fatal "測試覆蓋率捕獲失敗"
+
+  # 合併基線與測試資料
+  log_info "合併覆蓋率資料..."
+  lcov --add-tracefile "${build_dir}/coverage-base.info" \
+    --add-tracefile "${build_dir}/coverage-test.info" \
+    --output-file "${build_dir}/coverage.info" \
+    --rc branch_coverage=1 \
+    --ignore-errors mismatch,inconsistent,deprecated,corrupt,negative,empty ||
+    log_fatal "合併失敗"
+
+  # 過濾不需要的檔案
+  lcov --remove "${build_dir}/coverage.info" \
+    '/usr/*' \
+    '*/tests/*' \
+    '*/bench/*' \
+    '*/build/*' \
+    '*/CPM/*' \
+    '*/googletest/*' \
+    '*/benchmark/*' \
+    --output-file "${build_dir}/coverage-filtered.info" \
+    --rc branch_coverage=1 \
+    --ignore-errors mismatch,inconsistent,deprecated,unused ||
+    log_fatal "lcov 過濾失敗"
+
+  # 生成 HTML 報告
+  if command -v genhtml &>/dev/null; then
+    log_info "生成 HTML 報告..."
+
+    genhtml "${build_dir}/coverage-filtered.info" \
+      --output-directory "${build_dir}/coverage-html" \
+      --branch-coverage \
+      --title "TX Trading Engine Coverage Report" \
+      --legend ||
+      log_fatal "genhtml 失敗"
+
+    echo ""
+    log_separator "=" 50 "${LOG_COLOR_GREEN}"
+    log_success "覆蓋率報告生成完成！"
+    log_separator "=" 50 "${LOG_COLOR_GREEN}"
+
+    # 顯示摘要
+    log_info "覆蓋率摘要："
+    lcov --summary "${build_dir}/coverage-filtered.info" \
+      --rc lcov_branch_coverage=1 2>&1 | grep -E "lines\.\.\.\.\.\.|functions\.\.\.\.|branches\.\.\.\.\."
+
+    echo ""
+    log_info "詳細報告："
+    log_info "  HTML: ${build_dir}/coverage-html/index.html"
+    log_info "  開啟方式: xdg-open ${build_dir}/coverage-html/index.html"
+  else
+    log_warn "genhtml 未安裝，無法生成 HTML 報告"
+    log_info "只生成了 LCOV 資料檔: ${build_dir}/coverage-filtered.info"
+  fi
+}
+
+################################################################################
 # list 命令實作
 ################################################################################
 cmd_list() {
   log_header "可用命令" "${LOG_COLOR_CYAN}"
-
   echo "內建命令:"
   echo "  - build      建置專案"
   echo "  - test       執行測試"
   echo "  - bench      執行效能測試"
+  echo "  - format     代碼格式化檢查/修正"
+  echo "  - lint       靜態代碼分析"
+  echo "  - coverage   代碼覆蓋率分析"
   echo "  - clean      清理建置目錄"
   echo "  - install    安裝專案"
   echo "  - list       列出所有命令"
   echo "  - help       顯示幫助"
-
   echo ""
   log_info "執行 '${SCRIPT_NAME} help' 查看詳細說明"
 }
@@ -769,6 +1158,23 @@ main() {
     local build_type
     build_type=$(parse_build_type "${command}" "${1:-}")
     cmd_install "${build_type}"
+    ;;
+
+  format)
+    cmd_format "${1:-check}"
+    ;;
+
+  lint)
+    local build_type
+    build_type=$(parse_build_type "${command}" "${1:-}")
+    if is_valid_build_type "${1:-}"; then
+      shift
+    fi
+    cmd_lint "${build_type}"
+    ;;
+
+  coverage)
+    cmd_coverage
     ;;
 
   *)

@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# Git Pre-commit Hook for TX Trading Engine
+#
+# 功能：
+# 1. Format check (clang-format)
+# 2. Lint staged files (clang-tidy)
+# 3. Build debug
+# 4. Run unit tests
+#
+# 跳過方式：SKIP_PRECOMMIT=1 git commit -m "message"
+
+set -euo pipefail
+
+# ============================================
+# 第一部分：環境檢查與配置
+# ============================================
+# 取得專案根目錄（.git 的父目錄）
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "${REPO_ROOT}"
+# 檢查 run.sh 是否存在
+if [[ ! -f "./run.sh" ]]; then
+  echo "ERROR: run.sh not found in ${REPO_ROOT}"
+  exit 1
+fi
+
+# ============================================
+# 第二部分：跳過機制
+# ============================================
+# 允許透過環境變數跳過
+if [[ "${SKIP_PRECOMMIT:-0}" == "1" ]]; then
+  echo "[Pre-commit Hook] SKIPPED by user (SKIP_PRECOMMIT=1)"
+  exit 0
+fi
+
+# ============================================
+# 第三部分：顏色輸出函數（可選）
+# ============================================
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+log_info() {
+  echo -e "${BLUE}→ $1${NC}"
+}
+log_success() {
+  echo -e "${GREEN}✓ $1${NC}"
+}
+log_error() {
+  echo -e "${RED}✗ $1${NC}"
+}
+log_warning() {
+  echo -e "${YELLOW}! $1${NC}"
+}
+
+# ============================================
+# 第四部分：檢查函數
+# ============================================
+echo ""
+echo "========================================"
+echo "  Pre-commit Hook - Quality Checks"
+echo "========================================"
+echo ""
+# --------------------------------------------
+# Check 1: Format Check
+# --------------------------------------------
+log_info "Step 1/4: Checking code format..."
+if ./run.sh format check >/dev/null 2>&1; then
+  log_success "Format check passed"
+else
+  log_error "Format check failed"
+  echo ""
+  echo "Please run: ./run.sh format fix"
+  echo "Then stage the changes and commit again"
+  exit 1
+fi
+
+# --------------------------------------------
+# Check 2: Lint Staged Files Only
+# --------------------------------------------
+log_info "Step 2/4: Linting staged C++ files..."
+# 取得即將提交的 C++ 檔案
+staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(cpp|hpp)$' || true)
+if [[ -n "${staged_files}" ]]; then
+  # 有 C++ 檔案被修改，執行 lint
+
+  # 方法 A：使用完整的 run.sh lint（較慢但完整）
+  # if ! ./run.sh lint debug 1 >/dev/null 2>&1; then
+
+  # 方法 B：只檢查 staged files（快速）
+  # 需要從 compile_commands.json 取得編譯參數
+
+  if [[ -f "build/debug/compile_commands.json" ]]; then
+    # 使用 run-clang-tidy（平行執行）
+    if ! run-clang-tidy -p build/debug -quiet ${staged_files} 2>&1 | grep -q "error:"; then
+      log_success "Lint check passed (${staged_files} files)"
+    else
+      log_error "Lint check failed"
+      echo ""
+      echo "Run for details: ./run.sh lint debug verbose"
+      exit 1
+    fi
+  else
+    log_warning "compile_commands.json not found, skipping lint"
+    log_info "Run './run.sh build debug' first to enable linting"
+  fi
+else
+  log_success "No C++ files staged, lint skipped"
+fi
+
+# --------------------------------------------
+# Check 3: Build
+# --------------------------------------------
+log_info "Step 3/4: Building project (Debug)..."
+if ./run.sh build debug >/dev/null 2>&1; then
+  log_success "Build passed"
+else
+  log_error "Build failed"
+  echo ""
+  echo "Run for details: ./run.sh build debug"
+  exit 1
+fi
+
+# --------------------------------------------
+# Check 4: Tests
+# --------------------------------------------
+log_info "Step 4/4: Running unit tests..."
+if ./run.sh test debug >/dev/null 2>&1; then
+  log_success "All tests passed"
+else
+  log_error "Tests failed"
+  echo ""
+  echo "Run for details: ./run.sh test debug"
+  exit 1
+fi
+
+# ============================================
+# 第五部分：總結
+# ============================================
+echo ""
+log_success "All pre-commit checks passed!"
+echo ""
+echo "Tip: To skip these checks, use:"
+echo "  SKIP_PRECOMMIT=1 git commit -m \"your message\""
+echo ""
+exit 0
