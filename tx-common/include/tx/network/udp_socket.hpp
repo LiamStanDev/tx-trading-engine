@@ -116,13 +116,13 @@ class UdpSocket {
   /// @details
   ///   - 系統限制：/proc/sys/net/core/rmem_max
   ///   - 如果超過限制，需要 sudo sysctl -w net.core.rmem_max=8388608
-  SocketResult<> set_recv_buffer_size(size_t size) noexcept {
+  SocketResult<> set_recv_buffer_size(int size) noexcept {
     return socket_.set_recv_buffer_size(size);
   }
 
   /// @brief 設定發送緩衝區大小
   /// @return 成功或錯誤
-  SocketResult<> set_send_buffer_size(size_t size) noexcept {
+  SocketResult<> set_send_buffer_size(int size) noexcept {
     return socket_.set_send_buffer_size(size);
   }
 
@@ -139,7 +139,7 @@ class UdpSocket {
   [[nodiscard]] bool is_valid() const noexcept { return socket_.is_valid(); }
 
   /// @brief 取得本地地址
-  SocketResult<SocketAddress> local_address() const noexcept {
+  [[nodiscard]] SocketResult<SocketAddress> local_address() const noexcept {
     return socket_.local_address();
   }
 

@@ -1,5 +1,6 @@
 #include <fmt/format.h>
 
+#include <system_error>
 #include <tx/ipc/ipc_error.hpp>
 
 namespace tx::ipc {
@@ -57,7 +58,7 @@ std::string IpcError::message() const noexcept {
   // 如果有有效的 errno，包含系統錯誤訊息
   if (errno_ > 0) {
     return fmt::format("[{}]: {} (errno: {}, {})", code_name(), detail_, errno_,
-                       std::strerror(errno_));
+                       std::generic_category().message(errno_));
   }
 
   // 僅顯示錯誤碼與詳細訊息

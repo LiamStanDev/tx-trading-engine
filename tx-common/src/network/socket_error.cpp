@@ -1,5 +1,6 @@
 #include <fmt/format.h>
 
+#include <system_error>
 #include <tx/network/socket_error.hpp>
 
 namespace tx::network {
@@ -74,7 +75,7 @@ const char* SocketError::code_name() const noexcept { return to_string(code_); }
 std::string SocketError::message() const noexcept {
   if (errno_ > 0) {
     return fmt::format("[{}]: {} (errno: {}, {})", code_name(), detail_, errno_,
-                       std::strerror(errno_));
+                       std::generic_category().message(errno_));
   }
   return fmt::format("[{}]: {}", code_name(), detail_);
 }

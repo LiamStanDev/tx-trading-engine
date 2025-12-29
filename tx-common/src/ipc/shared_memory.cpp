@@ -47,7 +47,7 @@ IpcResult<SharedMemory> SharedMemory::create(std::string name, size_t size,
     }
   }
 
-  if (::ftruncate(fd, size) < 0) {
+  if (::ftruncate(fd, static_cast<ssize_t>(size)) < 0) {
     int saved_errno = errno;
     ::close(fd);
     ::shm_unlink(name.c_str());
@@ -93,8 +93,8 @@ IpcResult<SharedMemory> SharedMemory::open(std::string name) noexcept {
     }
   }
 
-  struct stat fs;
-  if (::fstat(fd, &fs) < 0) {
+  struct stat file_stat;
+  if (::fstat(fd, &file_stat) < 0) {
     int saved_errno = errno;
     ::close(fd);
 
@@ -104,7 +104,11 @@ IpcResult<SharedMemory> SharedMemory::open(std::string name) noexcept {
         fmt::format("Failed to get SHM size: '{}'", name)));
   }
 
-  size_t size = fs.st_size;
+  if (file_stat.st_size < 0) {
+    return Err(IpcError{IpcErrorCode::InvalidSize, "File size is less then 0"});
+  }
+
+  size_t size = static_cast<size_t>(file_stat.st_size);
 
   void* addr = ::mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (addr == MAP_FAILED) {

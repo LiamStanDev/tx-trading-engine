@@ -142,8 +142,8 @@ SocketResult<size_t> Socket::send(std::span<const std::byte> data) noexcept {
   ssize_t n = ::send(fd_, data.data(), data.size(), 0);
 
   if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      // EAGAIN/EWOULDBLOCK: 非阻塞模式下緩衝區滿了
+    if (errno == EAGAIN) {
+      // EAGAIN/EWOULDBLOCK: 非阻塞模式下緩衝區滿了 (linux 下相同)
       // 這非錯誤，而是稍後重試
       return Err(SocketError::from_errno(SocketErrorCode::WouldBlock,
                                          "Send buffer full"));
@@ -171,8 +171,8 @@ SocketResult<size_t> Socket::recv(std::span<std::byte> buffer) noexcept {
   ssize_t n = ::recv(fd_, buffer.data(), buffer.size(), 0);
 
   if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      // EAGAIN/EWOULDBLOCK: 非阻塞模式下沒有數據
+    if (errno == EAGAIN) {
+      // EAGAIN/EWOULDBLOCK: 非阻塞模式下沒有數據 (linux 下相同)
       // 這非錯誤，而是稍後重試
       return Err(SocketError::from_errno(SocketErrorCode::WouldBlock,
                                          "No data available"));
@@ -194,7 +194,7 @@ SocketResult<size_t> Socket::sendto(std::span<const std::byte> data,
       ::sendto(fd_, data.data(), data.size(), 0, dest.raw(), dest.length());
 
   if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (errno == EAGAIN) {
       return Err(SocketError::from_errno(SocketErrorCode::WouldBlock,
                                          "Send buffer full"));
     }
@@ -222,7 +222,7 @@ SocketResult<size_t> Socket::recvfrom(std::span<std::byte> buffer,
   }
 
   if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (errno == EAGAIN) {
       // EAGAIN/EWOULDBLOCK: 非阻塞模式下沒有數據
       // 這非錯誤，而是稍後重試
       return Err(SocketError::from_errno(SocketErrorCode::WouldBlock,
