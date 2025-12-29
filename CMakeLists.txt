@@ -31,6 +31,9 @@ option(TX_BUILD_TESTS "Build tests" ON)
 option(TX_BUILD_BENCHMARKS "Build benchmarks" ON)
 option(TX_ENABLE_WARNINGS "Enable compiler warnings" ON)
 option(TX_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
+option(TX_ENABLE_LTO "Enable Link Time Optimization" ON)
+option(TX_ENABLE_ASAN "Enable AddressSanitizer" ON)
+option(TX_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" ON)
 
 # =========================
 # 全局設定
@@ -50,28 +53,47 @@ endif()
 # =========================
 add_library(tx-compiler-options INTERFACE)
 add_library(tx::compiler-options ALIAS tx-compiler-options)
+
 # C++ 標準要求
 target_compile_features(tx-compiler-options INTERFACE cxx_std_20)
+
 # 編譯器警告
 if(TX_ENABLE_WARNINGS)
   target_compile_options(tx-compiler-options INTERFACE
-    -Wall
-    -Wextra
+    -Wall -Wextra
+    -Wconversion -Wsign-conversion  # 隱式轉換
+    -Wshadow                        # 變數遮蔽
     $<$<BOOL:${TX_WARNINGS_AS_ERRORS}>:-Werror>
   )
 endif()
 
-# 建置類型特定選項
+# 編譯選項
 target_compile_options(tx-compiler-options INTERFACE
-  $<$<CONFIG:Debug>:-g -O0>
-  $<$<CONFIG:Release>:-O3 -march=native -flto -DNDEBUG>
-  $<$<CONFIG:RelWithDebInfo>:-g -O2 -DNDEBUG>
-  $<$<CONFIG:MinSizeRel>:-Os -DNDEBUG>
+  # Debug + Sanitizers
+  $<$<CONFIG:Debug>: -g3 -Og -fno-omit-frame-pointer
+    $<$<BOOL:${TX_ENABLE_ASAN}>:-fsanitize=address -fno-omit-frame-pointer>
+    $<$<BOOL:${TX_ENABLE_UBSAN}>:-fsanitize=undefined>
+  >
+
+  # Release + LTO
+  # -march=x86-64-v2  # 支持 SSE4.2, POPCNT (2008+)
+  # -march=x86-64-v3  # 支持 AVX2, BMI2 (2013+)
+  # -march=x86-64-v4  # 支持 AVX512 (2017+)
+  # -flto=auto        # 多執行序 LTO
+  $<$<CONFIG:Release>: -O3 -march=native -DNDEBUG
+    $<$<BOOL:${TX_ENABLE_LTO}>:-flto=auto>
+  >
 )
 
-# Debug 模式定義 (可以使用 #ifdef DEBUG 宏)
-target_compile_definitions(tx-compiler-options INTERFACE
-  $<$<CONFIG:Debug>:DEBUG=1>
+# 鏈接選項（LTO 和 Sanitizers 都需要）
+target_link_options(tx-compiler-options INTERFACE
+  $<$<CONFIG:Debug>:
+    $<$<BOOL:${TX_ENABLE_ASAN}>:-fsanitize=address>
+    $<$<BOOL:${TX_ENABLE_UBSAN}>:-fsanitize=undefined>
+  >
+  $<$<CONFIG:Release>:
+    $<$<BOOL:${TX_ENABLE_LTO}>:-flto=auto>
+  >
 )
 
 # =========================
@@ -133,6 +155,9 @@ message(STATUS "  Build Tests: ${TX_BUILD_TESTS}")
 message(STATUS "  Build Benchmarks: ${TX_BUILD_BENCHMARKS}")
 message(STATUS "  Enable Warnings: ${TX_ENABLE_WARNINGS}")
 message(STATUS "  Warnings as Errors: ${TX_WARNINGS_AS_ERRORS}")
+message(STATUS "  Enable LTO: ${TX_ENABLE_LTO}")
+message(STATUS "  Enable AddressSanitizer: ${TX_ENABLE_ASAN}")
+message(STATUS "  Enable UndefinedBehaviorSanitizer: ${TX_ENABLE_UBSAN}")
 message(STATUS "----------------------------------------")
 message(STATUS "CPM Cache: $ENV{CPM_SOURCE_CACHE}")
 message(STATUS "========================================")
