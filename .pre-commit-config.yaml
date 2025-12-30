@@ -1,0 +1,27 @@
+repos:
+  # 1. 自動排版：Clang-format
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8 # 建議與你電腦安裝的 clang 版本一致
+    hooks:
+      - id: clang-format
+
+  # 2. 靜態分析：Clang-tidy (本地端執行)
+  - repo: local
+    hooks:
+      - id: clang-tidy
+        name: clang-tidy
+        entry: clang-tidy
+        language: system
+        files: \.(cpp|cxx|cc|h|hpp)$
+        # -p=build 指向編譯資料庫的路徑
+        args: ["-p=build/", "--quiet", "--warnings-as-errors=bugprone-*"]
+        require_serial: true
+
+  # 3. 基本檢查：防止大檔案、檢查語法錯誤、修剪行尾空白
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
