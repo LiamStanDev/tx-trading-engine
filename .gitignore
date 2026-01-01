@@ -76,12 +76,18 @@ coverage-filtered.info
 *.valgrind
 vgcore.*
 # Core dumps
-core
 core.*
 
 # =========================
 # 文件與日誌
 # =========================
+# Doxygen 生成的文件
+docs/
+Doxyfile
+# 其他文件格式
+*.pdf
+*.html
+# 日誌檔案
 *.log
 *.out
 

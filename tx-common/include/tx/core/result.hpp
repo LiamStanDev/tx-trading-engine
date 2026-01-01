@@ -3,10 +3,12 @@
 
 #include <cassert>
 #include <concepts>
-#include <optional>
 #include <type_traits>
 #include <utility>
 #include <variant>
+
+#include "tx/core/error.hpp"
+
 namespace tx::core {
 
 // ===========================
@@ -86,11 +88,11 @@ class [[nodiscard]] Result {
   // ===========================
   /// @brief 建構成功值
   /// @details 採用委託構造
-  Result(Ok<T> ok) noexcept
+  Result(Ok<T> ok) noexcept  // NOLINT
       : Result(std::in_place_index<0>, std::move(ok.value)) {}
   /// @brief 建構錯誤值
   /// @details 採用委託構造
-  Result(Err<E> err) noexcept
+  Result(Err<E> err) noexcept  // NOLINT
       : Result(std::in_place_index<1>, std::move(err.error)) {}
 
   // ===========================
@@ -310,19 +312,19 @@ class [[nodiscard]] Result<void, E> {
   }
 };
 
-/// 方便全局使用
-
 }  // namespace tx::core
 
 namespace tx {
+
 template <typename T = void>
 using Ok = core::Ok<T>;
 
 template <typename E>
 using Err = core::Err<E>;
 
-template <typename T, typename E>
+template <typename T = void, typename E = core::Error>
 using Result = core::Result<T, E>;
+
 }  // namespace tx
 
 /// @brief 解包 Result<T, E>，失敗時提前返回

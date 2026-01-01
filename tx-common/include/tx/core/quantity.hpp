@@ -1,5 +1,6 @@
 #ifndef TX_TRADING_ENGINE_CORE_QUANTITY_HPP
 #define TX_TRADING_ENGINE_CORE_QUANTITY_HPP
+
 #include <cassert>
 #include <cstdint>
 

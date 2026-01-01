@@ -1,9 +1,8 @@
 #ifndef TX_TRADING_ENGINE_NETWORK_UDP_SOCKET_HPP
 #define TX_TRADING_ENGINE_NETWORK_UDP_SOCKET_HPP
 
-#include <tx/core/result.hpp>
-#include <tx/network/socket.hpp>
-
+#include "tx/core/result.hpp"
+#include "tx/network/socket.hpp"
 #include "tx/network/socket_address.hpp"
 
 namespace tx::network {
@@ -20,12 +19,12 @@ class UdpSocket {
   // ==================================
   // @brief 建立 UDP Socket
   // @details 適用於 Client/Server 通用場景
-  static SocketResult<UdpSocket> create() noexcept;
+  static Result<UdpSocket> create() noexcept;
 
   // @brief 建立並綁定 UDP Socket
   // @param local_addr 本機地址
   // @details 適用於 Server 端或者 Multicast 接收端
-  static SocketResult<UdpSocket> bind(const SocketAddress& local_addr) noexcept;
+  static Result<UdpSocket> bind(const SocketAddress& local_addr) noexcept;
 
   // ==================================
   // RAII 管理
@@ -44,9 +43,9 @@ class UdpSocket {
   /// @param interface_addr 網卡地址 (0.0.0.0 = 自動選擇)
   /// @return 成功或錯誤
   /// @details 內部使用 IP_ADD_MEMBERSHIP
-  SocketResult<> join_multicast_group(const SocketAddress& multicast_addr,
-                                      const SocketAddress& interface_addr =
-                                          SocketAddress::any_ipv4(0)) noexcept {
+  Result<> join_multicast_group(const SocketAddress& multicast_addr,
+                                const SocketAddress& interface_addr =
+                                    SocketAddress::any_ipv4(0)) noexcept {
     return socket_.join_multicast_group(multicast_addr, interface_addr);
   }
 
@@ -55,10 +54,9 @@ class UdpSocket {
   /// @param interface_addr 網卡地址
   /// @return 成功或錯誤
   /// @details 內部使用 IP_DROP_MEMBERSHIP
-  SocketResult<> leave_multicast_group(
-      const SocketAddress& multicast_addr,
-      const SocketAddress& interface_addr =
-          SocketAddress::any_ipv4(0)) noexcept {
+  Result<> leave_multicast_group(const SocketAddress& multicast_addr,
+                                 const SocketAddress& interface_addr =
+                                     SocketAddress::any_ipv4(0)) noexcept {
     return socket_.leave_multicast_group(multicast_addr, interface_addr);
   }
 
@@ -68,13 +66,13 @@ class UdpSocket {
   ///  - 1: 同一子網
   ///  - 32: 同一地區
   ///  - 255: 全球
-  SocketResult<> set_multicast_ttl(int ttl = 1) noexcept {
+  Result<> set_multicast_ttl(int ttl = 1) noexcept {
     return socket_.set_multicast_ttl(ttl);
   }
 
   /// @brief 設定是否接收自己發送的 Multicast 封包
   /// @details 內部使用 IP_MULTICAST_LOOP（預設 true）
-  SocketResult<> set_multicast_loopback(bool enable) noexcept {
+  Result<> set_multicast_loopback(bool enable) noexcept {
     return socket_.set_multicast_loopback(enable);
   }
 
@@ -89,8 +87,8 @@ class UdpSocket {
   ///   - UDP 保證原子性（整個封包發送或失敗）
   ///   - 單個封包不超過 MTU（通常 1500 bytes）
   ///   - 超過 MTU 會被 IP 層分片（可能丟失）
-  SocketResult<size_t> sendto(std::span<const std::byte> data,
-                              const SocketAddress& dest) noexcept {
+  Result<size_t> sendto(std::span<const std::byte> data,
+                        const SocketAddress& dest) noexcept {
     return socket_.sendto(data, dest);
   }
 
@@ -102,8 +100,8 @@ class UdpSocket {
   ///   - 單次接收一個完整封包
   ///   - buffer 太小會截斷（MSG_TRUNC）
   ///   - 建議 buffer >= 65536（UDP 最大封包）
-  SocketResult<size_t> recvfrom(std::span<std::byte> buffer,
-                                SocketAddress* src = nullptr) noexcept {
+  Result<size_t> recvfrom(std::span<std::byte> buffer,
+                          SocketAddress* src = nullptr) noexcept {
     return socket_.recvfrom(buffer, src);
   }
 
@@ -116,19 +114,19 @@ class UdpSocket {
   /// @details
   ///   - 系統限制：/proc/sys/net/core/rmem_max
   ///   - 如果超過限制，需要 sudo sysctl -w net.core.rmem_max=8388608
-  SocketResult<> set_recv_buffer_size(int size) noexcept {
+  Result<> set_recv_buffer_size(int size) noexcept {
     return socket_.set_recv_buffer_size(size);
   }
 
   /// @brief 設定發送緩衝區大小
   /// @return 成功或錯誤
-  SocketResult<> set_send_buffer_size(int size) noexcept {
+  Result<> set_send_buffer_size(int size) noexcept {
     return socket_.set_send_buffer_size(size);
   }
 
   /// @brief 設定非阻塞模式
   /// @return 成功或錯誤
-  SocketResult<> set_nonblocking(bool enable) noexcept {
+  Result<> set_nonblocking(bool enable) noexcept {
     return socket_.set_nonblocking(enable);
   }
 
@@ -139,7 +137,7 @@ class UdpSocket {
   [[nodiscard]] bool is_valid() const noexcept { return socket_.is_valid(); }
 
   /// @brief 取得本地地址
-  [[nodiscard]] SocketResult<SocketAddress> local_address() const noexcept {
+  [[nodiscard]] Result<SocketAddress> local_address() const noexcept {
     return socket_.local_address();
   }
 

@@ -1,11 +1,11 @@
-#include <tx/network/tcp_socket.hpp>
+#include "tx/network/tcp_socket.hpp"
 
 #include "tx/core/result.hpp"
 #include "tx/network/socket.hpp"
 
 namespace tx::network {
-SocketResult<TcpSocket> TcpSocket::connect(const SocketAddress& remote_addr,
-                                           bool nodelay) noexcept {
+Result<TcpSocket> TcpSocket::connect(const SocketAddress& remote_addr,
+                                     bool nodelay) noexcept {
   auto socket = TRY(Socket::create_tcp());
 
   if (nodelay) {
@@ -21,8 +21,8 @@ SocketResult<TcpSocket> TcpSocket::connect(const SocketAddress& remote_addr,
   return Ok(TcpSocket{std::move(socket)});
 }
 
-SocketResult<TcpSocket> TcpSocket::serve(const SocketAddress& local_addr,
-                                         int backlog) noexcept {
+Result<TcpSocket> TcpSocket::serve(const SocketAddress& local_addr,
+                                   int backlog) noexcept {
   auto socket = TRY(Socket::create_tcp());
 
   CHECK(socket.set_reuseaddr(true));
@@ -32,7 +32,7 @@ SocketResult<TcpSocket> TcpSocket::serve(const SocketAddress& local_addr,
   return Ok(TcpSocket{std::move(socket)});
 }
 
-SocketResult<TcpSocket> TcpSocket::accept(SocketAddress* client_addr) noexcept {
+Result<TcpSocket> TcpSocket::accept(SocketAddress* client_addr) noexcept {
   auto socket = TRY(socket_.accept(client_addr));
 
   return Ok(TcpSocket{std::move(socket)});

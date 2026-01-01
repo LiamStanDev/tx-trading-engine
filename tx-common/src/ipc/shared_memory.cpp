@@ -1,50 +1,32 @@
+#include "tx/ipc/shared_memory.hpp"
+
 #include <fcntl.h>
 #include <fmt/format.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <tx/core/result.hpp>
-#include <tx/ipc/shared_memory.hpp>
-
-#include "tx/ipc/ipc_error.hpp"
+#include "tx/core/result.hpp"
 
 namespace tx::ipc {
 
-IpcResult<SharedMemory> SharedMemory::create(std::string name, size_t size,
-                                             mode_t mode) noexcept {
+Result<SharedMemory> SharedMemory::create(std::string name, size_t size,
+                                          mode_t mode) noexcept {
   if (name.empty() || name[0] != '/') {
-    return Err(
-        IpcError(IpcErrorCode::InvalidName, "SHM name must start with '/'"));
+    return Err(Error::from_errc(std::errc::invalid_argument,
+                                "SHM name must start with '/'"));
   }
 
   if (size == 0) {
     return Err(
-        IpcError(IpcErrorCode::InvalidParameter, "SHM size cannot be 0"));
+        Error::from_errc(std::errc::invalid_argument, "SHM size cannot be 0"));
   }
 
   // O_EXCL: 當已經存在會返回錯誤碼 (默認不會)，但我們必須知道是否是 owner
   // 所以得這樣做
   int fd = ::shm_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, mode);
   if (fd < 0) {
-    switch (errno) {
-      case EEXIST:
-        return Err(IpcError::from_errno(IpcErrorCode::AlreadyExists,
-                                        fmt::format("Name '{}'", name)));
-      case EACCES:
-        return Err(IpcError::from_errno(IpcErrorCode::PermissionDenied,
-                                        fmt::format("Name '{}'", name)));
-      case EINVAL:
-        return Err(IpcError::from_errno(IpcErrorCode::InvalidName,
-                                        fmt::format("Name '{}'", name)));
-      case EMFILE:
-      case ENFILE:
-        return Err(IpcError::from_errno(IpcErrorCode::TooManyFiles,
-                                        "Too many open files"));
-      default:
-        return Err(IpcError::from_errno(IpcErrorCode::ShmCreateFailed,
-                                        fmt::format("Name '{}'", name)));
-    }
+    return Err(Error::from_errno(fmt::format("Name '{}'", name)));
   }
 
   if (::ftruncate(fd, static_cast<ssize_t>(size)) < 0) {
@@ -53,9 +35,8 @@ IpcResult<SharedMemory> SharedMemory::create(std::string name, size_t size,
     ::shm_unlink(name.c_str());
 
     errno = saved_errno;
-    return Err(IpcError::from_errno(
-        IpcErrorCode::FtruncateFailed,
-        fmt::format("Failed to set SHM size to {}", size)));
+    return Err(
+        Error::from_errno(fmt::format("Failed to set SHM size to {}", size)));
   }
 
   void* addr = ::mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -65,32 +46,21 @@ IpcResult<SharedMemory> SharedMemory::create(std::string name, size_t size,
     ::shm_unlink(name.c_str());
 
     errno = saved_errno;
-    return Err(IpcError::from_errno(
-        IpcErrorCode::MmapFailed, fmt::format("Failed to mmap SHM: {}", name)));
+    return Err(Error::from_errno(fmt::format("Failed to mmap SHM: {}", name)));
   }
 
   return Ok(SharedMemory(name, addr, size, fd, true));
 }
 
-IpcResult<SharedMemory> SharedMemory::open(std::string name) noexcept {
+Result<SharedMemory> SharedMemory::open(std::string name) noexcept {
   if (name.empty() || name[0] != '/') {
-    return Err(
-        IpcError(IpcErrorCode::InvalidName, "SHM name must start with '/'"));
+    return Err(Error::from_errc(std::errc::invalid_argument,
+                                "SHM name must start with '/'"));
   }
 
   int fd = ::shm_open(name.c_str(), O_RDWR, 0);
   if (fd < 0) {
-    switch (errno) {
-      case ENOENT:
-        return Err(IpcError::from_errno(IpcErrorCode::NotFound,
-                                        fmt::format("Name '{}'", name)));
-      case EACCES:
-        return Err(IpcError::from_errno(IpcErrorCode::PermissionDenied,
-                                        fmt::format("Name '{}'", name)));
-      default:
-        return Err(IpcError::from_errno(IpcErrorCode::ShmOpenFailed,
-                                        fmt::format("Name '{}'", name)));
-    }
+    return Err(Error::from_errno(fmt::format("Name '{}'", name)));
   }
 
   struct stat file_stat;
@@ -99,13 +69,12 @@ IpcResult<SharedMemory> SharedMemory::open(std::string name) noexcept {
     ::close(fd);
 
     errno = saved_errno;
-    return Err(IpcError::from_errno(
-        IpcErrorCode::FstatFailed,
-        fmt::format("Failed to get SHM size: '{}'", name)));
+    return Err(Error::from_errno(fmt::format("Failed to mmap SHM: {}", name)));
   }
 
   if (file_stat.st_size < 0) {
-    return Err(IpcError{IpcErrorCode::InvalidSize, "File size is less then 0"});
+    return Err(Error::from_errc(std::errc::invalid_argument,
+                                "File size is less then 0"));
   }
 
   size_t size = static_cast<size_t>(file_stat.st_size);
@@ -116,8 +85,7 @@ IpcResult<SharedMemory> SharedMemory::open(std::string name) noexcept {
     ::close(fd);
 
     errno = saved_errno;
-    return Err(IpcError::from_errno(
-        IpcErrorCode::MmapFailed, fmt::format("Failed to mmap SHM: {}", name)));
+    return Err(Error::from_errno(fmt::format("Failed to mmap SHM: {}", name)));
   }
 
   return Ok(SharedMemory(name, addr, size, fd, false));

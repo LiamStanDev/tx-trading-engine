@@ -9,14 +9,12 @@ add_library(tx::common ALIAS tx-common)
 # ============================
 target_sources(tx-common
   PRIVATE
+    ./src/core/error.cpp
     ./src/core/price.cpp
     ./src/network/socket_address.cpp
     ./src/network/socket.cpp
     ./src/network/tcp_socket.cpp
     ./src/network/udp_socket.cpp
-    ./src/network/address_error.cpp
-    ./src/network/socket_error.cpp
-    ./src/ipc/ipc_error.cpp
     ./src/ipc/shared_memory.cpp
 )
 

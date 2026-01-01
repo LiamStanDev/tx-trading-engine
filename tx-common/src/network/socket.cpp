@@ -1,3 +1,5 @@
+#include "tx/network/socket.hpp"
+
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -6,28 +8,27 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
-#include <tx/core/result.hpp>
-#include <tx/network/socket.hpp>
-#include <tx/network/socket_address.hpp>
 #include <utility>
 
-#include "tx/network/socket_error.hpp"
+#include "tx/core/error.hpp"
+#include "tx/core/result.hpp"
+#include "tx/network/socket_address.hpp"
 
 namespace tx::network {
 
-SocketResult<Socket> Socket::create_tcp() noexcept {
+Result<Socket> Socket::create_tcp() noexcept {
   int fd = ::socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::CreateFailed));
+    return Err(Error::from_errno("Failed to create TCP socket"));
   }
 
   return Ok(Socket{fd});
 }
 
-SocketResult<Socket> Socket::create_udp() noexcept {
+Result<Socket> Socket::create_udp() noexcept {
   int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
   if (fd < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::CreateFailed));
+    return Err(Error::from_errno("Failed to create UDP socket"));
   }
 
   return Ok(Socket{fd});
@@ -45,33 +46,36 @@ Socket& Socket::operator=(Socket&& other) noexcept {
   return *this;
 }
 
-SocketResult<> Socket::bind(const SocketAddress& addr) noexcept {
+Result<> Socket::bind(const SocketAddress& addr) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   if (::bind(fd_, addr.raw(), addr.length()) < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::BindFailed));
+    return Err(Error::from_errno("Failed to bind socket"));
   }
 
   return Ok<>();
 }
 
-SocketResult<> Socket::listen(int backlog) noexcept {
+Result<> Socket::listen(int backlog) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   if (::listen(fd_, backlog) < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::ListenFailed));
+    return Err(Error::from_errno("Failed to listen on socket"));
   }
 
   return Ok<>();
 }
 
-SocketResult<Socket> Socket::accept(SocketAddress* client_addr) noexcept {
+Result<Socket> Socket::accept(SocketAddress* client_addr) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   int client_fd;
@@ -82,31 +86,33 @@ SocketResult<Socket> Socket::accept(SocketAddress* client_addr) noexcept {
     client_fd = ::accept(fd_, nullptr, nullptr);
   }
   if (client_fd < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::AcceptFailed));
+    return Err(Error::from_errno("Failed to accept connection"));
   }
 
   return Ok(Socket{client_fd});
 }
 
-SocketResult<> Socket::connect(const SocketAddress& addr) noexcept {
+Result<> Socket::connect(const SocketAddress& addr) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   if (::connect(fd_, addr.raw(), addr.length()) < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::ConnectFailed));
+    return Err(Error::from_errno("Failed to connect socket"));
   }
   return Ok<>();
 }
 
-SocketResult<> Socket::set_nonblocking(bool enable) noexcept {
+Result<> Socket::set_nonblocking(bool enable) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   int flags = ::fcntl(fd_, F_GETFL, 0);
   if (flags < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::FcntlGetFailed));
+    return Err(Error::from_errno("Failed to get socket flags (fcntl F_GETFL)"));
   }
 
   if (enable) {
@@ -116,27 +122,29 @@ SocketResult<> Socket::set_nonblocking(bool enable) noexcept {
   }
 
   if (::fcntl(fd_, F_SETFL, flags) < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::FcntlSetFailed));
+    return Err(Error::from_errno("Failed to set socket flags (fcntl F_SETFL)"));
   }
 
   return Ok<>();
 }
 
-SocketResult<> Socket::set_tcp_keepalive(bool enable) noexcept {
+Result<> Socket::set_tcp_keepalive(bool enable) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
   int optval = enable ? 1 : 0;
   if (::setsockopt(fd_, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) <
       0) {
-    return Err(SocketError::from_errno(SocketErrorCode::SetSockOptFailed));
+    return Err(Error::from_errno("Failed to set TCP keepalive"));
   }
   return Ok<>();
 }
 
-SocketResult<size_t> Socket::send(std::span<const std::byte> data) noexcept {
+Result<size_t> Socket::send(std::span<const std::byte> data) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   ssize_t n = ::send(fd_, data.data(), data.size(), 0);
@@ -145,27 +153,27 @@ SocketResult<size_t> Socket::send(std::span<const std::byte> data) noexcept {
     if (errno == EAGAIN) {
       // EAGAIN/EWOULDBLOCK: 非阻塞模式下緩衝區滿了 (linux 下相同)
       // 這非錯誤，而是稍後重試
-      return Err(SocketError::from_errno(SocketErrorCode::WouldBlock,
-                                         "Send buffer full"));
+      return Err(Error::from_errno("Send buffer full (would block)"));
     }
 
     // EINTR: 被信號中斷
     // EPIPE: 對端關閉連線 (寫入已關閉的 socket)
-    return Err(SocketError::from_errno(SocketErrorCode::AlreadyClosed));
+    return Err(Error::from_errno("Failed to send data"));
   }
 
   // 發送時對端關閉
   if (n == 0 && data.size() > 0) {
-    return Err(SocketError{SocketErrorCode::AlreadyClosed,
-                           "send() returned 0 unexpectedly"});
+    return Err(Error::from_errc(std::errc::connection_reset,
+                                "send() returned 0 unexpectedly"));
   }
 
   return Ok(static_cast<size_t>(n));
 }
 
-SocketResult<size_t> Socket::recv(std::span<std::byte> buffer) noexcept {
+Result<size_t> Socket::recv(std::span<std::byte> buffer) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   ssize_t n = ::recv(fd_, buffer.data(), buffer.size(), 0);
@@ -174,20 +182,20 @@ SocketResult<size_t> Socket::recv(std::span<std::byte> buffer) noexcept {
     if (errno == EAGAIN) {
       // EAGAIN/EWOULDBLOCK: 非阻塞模式下沒有數據 (linux 下相同)
       // 這非錯誤，而是稍後重試
-      return Err(SocketError::from_errno(SocketErrorCode::WouldBlock,
-                                         "No data available"));
+      return Err(Error::from_errno("No data available (would block)"));
     }
 
-    return Err(SocketError::from_errno(SocketErrorCode::RecvFailed));
+    return Err(Error::from_errno("Failed to receive data"));
   }
 
   return Ok(static_cast<size_t>(n));
 }
 
-SocketResult<size_t> Socket::sendto(std::span<const std::byte> data,
-                                    const SocketAddress& dest) noexcept {
+Result<size_t> Socket::sendto(std::span<const std::byte> data,
+                              const SocketAddress& dest) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   ssize_t n =
@@ -195,20 +203,20 @@ SocketResult<size_t> Socket::sendto(std::span<const std::byte> data,
 
   if (n < 0) {
     if (errno == EAGAIN) {
-      return Err(SocketError::from_errno(SocketErrorCode::WouldBlock,
-                                         "Send buffer full"));
+      return Err(Error::from_errno("Send buffer full (would block)"));
     }
-    return Err(SocketError::from_errno(SocketErrorCode::SendFailed));
+    return Err(Error::from_errno("Failed to send data (sendto)"));
   }
 
   // UDP 無流量控制，通常為全部發送不然就是失敗
   return Ok(static_cast<size_t>(n));
 }
 
-SocketResult<size_t> Socket::recvfrom(std::span<std::byte> buffer,
-                                      SocketAddress* src) noexcept {
+Result<size_t> Socket::recvfrom(std::span<std::byte> buffer,
+                                SocketAddress* src) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   ssize_t n;
@@ -225,73 +233,81 @@ SocketResult<size_t> Socket::recvfrom(std::span<std::byte> buffer,
     if (errno == EAGAIN) {
       // EAGAIN/EWOULDBLOCK: 非阻塞模式下沒有數據
       // 這非錯誤，而是稍後重試
-      return Err(SocketError::from_errno(SocketErrorCode::WouldBlock,
-                                         "No data available"));
+      return Err(Error::from_errno("No data available (would block)"));
     }
 
-    return Err(SocketError::from_errno(SocketErrorCode::RecvFailed));
+    return Err(Error::from_errno("Failed to receive data (recvfrom)"));
   }
 
   return Ok(static_cast<size_t>(n));
 }
 
-SocketResult<> Socket::set_reuseaddr(bool enable) noexcept {
+Result<> Socket::set_reuseaddr(bool enable) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
   int optval = enable ? 1 : 0;
   if (enable) {
     if (::setsockopt(fd_, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) <
         0) {
-      return Err(SocketError::from_errno(SocketErrorCode::SetSockOptFailed));
+      return Err(Error::from_errno("Failed to set SO_REUSEADDR"));
     }
   }
   return Ok<>();
 }
 
-SocketResult<> Socket::set_tcp_nodelay(bool enable) noexcept {
+Result<> Socket::set_tcp_nodelay(bool enable) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
   int optval = enable ? 1 : 0;
   if (::setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval)) <
       0) {
-    return Err(SocketError::from_errno(SocketErrorCode::SetSockOptFailed));
+    return Err(Error::from_errno("Failed to set TCP_NODELAY"));
   }
   return Ok<>();
 }
 
-SocketResult<> Socket::set_recv_buffer_size(int size) noexcept {
+Result<> Socket::set_recv_buffer_size(int size) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
   if (::setsockopt(fd_, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size)) < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::SetSockOptFailed));
+    return Err(Error::from_errno("Failed to set receive buffer size"));
   }
   return Ok<>();
 }
 
-SocketResult<> Socket::join_multicast_group(
+Result<> Socket::join_multicast_group(
     const SocketAddress& multicast_addr,
     const SocketAddress& interface_addr) noexcept {
+  if (!is_valid()) {
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
+  }
+
   const auto* mcast_in_addr = multicast_addr.ipv4_addr();
   if (!mcast_in_addr) {
-    return Err(SocketError{SocketErrorCode::InvalidParameter,
-                           "Multicast address must be IPv4"});
+    return Err(Error::from_errc(std::errc::invalid_argument,
+                                "Multicast address must be IPv4"));
   }
 
   const auto* iface_in_addr = interface_addr.ipv4_addr();
   if (!iface_in_addr) {
-    return Err(SocketError{SocketErrorCode::InvalidParameter,
-                           "Interface address must be IPv4"});
+    return Err(Error::from_errc(std::errc::invalid_argument,
+                                "Interface address must be IPv4"));
   }
 
   // 驗證 Multicast 地址範圍（224.0.0.0 ~ 239.255.255.255）
   uint32_t addr_host = ntohl(mcast_in_addr->s_addr);
   if (addr_host < 0xE0000000 || addr_host > 0xEFFFFFFF) {
-    return Err(SocketError{SocketErrorCode::InvalidParameter,
-                           "Address " + multicast_addr.to_string() +
-                               " is not in Multicast range (224.0.0.0/4)"});
+    return Err(
+        Error::from_errc(std::errc::invalid_argument,
+                         "Address " + multicast_addr.to_string() +
+                             " is not in Multicast range (224.0.0.0/4)"));
   }
 
   struct ip_mreq mreq{};
@@ -300,37 +316,39 @@ SocketResult<> Socket::join_multicast_group(
 
   if (::setsockopt(fd_, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) <
       0) {
-    return Err(SocketError::from_errno(SocketErrorCode::JoinMulticastFailed));
+    return Err(Error::from_errno("Failed to join multicast group"));
   }
 
   return Ok<>();
 }
-/// /// @brief 離開 Multicast group
-SocketResult<> Socket::leave_multicast_group(
+
+Result<> Socket::leave_multicast_group(
     const SocketAddress& multicast_addr,
     const SocketAddress& interface_addr) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   const auto* mcast_in_addr = multicast_addr.ipv4_addr();
   if (!mcast_in_addr) {
-    return Err(SocketError{SocketErrorCode::InvalidParameter,
-                           "Multicast address must be IPv4"});
+    return Err(Error::from_errc(std::errc::invalid_argument,
+                                "Multicast address must be IPv4"));
   }
 
   const auto* iface_in_addr = interface_addr.ipv4_addr();
   if (!iface_in_addr) {
-    return Err(SocketError{SocketErrorCode::InvalidParameter,
-                           "Interface address must be IPv4"});
+    return Err(Error::from_errc(std::errc::invalid_argument,
+                                "Interface address must be IPv4"));
   }
 
   // 驗證 Multicast 地址範圍（224.0.0.0 ~ 239.255.255.255）
   uint32_t addr_host = ntohl(mcast_in_addr->s_addr);
   if (addr_host < 0xE0000000 || addr_host > 0xEFFFFFFF) {
-    return Err(SocketError{SocketErrorCode::InvalidParameter,
-                           "Address " + multicast_addr.to_string() +
-                               " is not in Multicast range (224.0.0.0/4)"});
+    return Err(
+        Error::from_errc(std::errc::invalid_argument,
+                         "Address " + multicast_addr.to_string() +
+                             " is not in Multicast range (224.0.0.0/4)"));
   }
 
   struct ip_mreq mreq{};
@@ -339,77 +357,80 @@ SocketResult<> Socket::leave_multicast_group(
 
   if (::setsockopt(fd_, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) <
       0) {
-    return Err(SocketError::from_errno(SocketErrorCode::LeaveMulticastFailed));
+    return Err(Error::from_errno("Failed to leave multicast group"));
   }
 
   return Ok<>();
 }
 
-/// @brief 設定 Multicast TTL (發送端)
-SocketResult<> Socket::set_multicast_ttl(int ttl) noexcept {
+Result<> Socket::set_multicast_ttl(int ttl) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   if (ttl < 0 || ttl > 255) {
-    return Err(
-        SocketError{SocketErrorCode::InvalidParameter,
-                    "Multicast TTL must be 0-255, got " + std::to_string(ttl)});
+    return Err(Error::from_errc(
+        std::errc::invalid_argument,
+        "Multicast TTL must be 0-255, got " + std::to_string(ttl)));
   }
 
   if (::setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::SetSockOptFailed));
+    return Err(Error::from_errno("Failed to set multicast TTL"));
   }
 
   return Ok<>();
 }
 
-/// /// @brief 設定是否接收自己發送的 Multicast 封包
-SocketResult<> Socket::set_multicast_loopback(bool enable) noexcept {
+Result<> Socket::set_multicast_loopback(bool enable) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   int loop = enable ? 1 : 0;
 
   if (::setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop)) <
       0) {
-    return Err(SocketError::from_errno(SocketErrorCode::SetSockOptFailed));
+    return Err(Error::from_errno("Failed to set multicast loopback"));
   }
   return Ok<>();
 }
 
-SocketResult<> Socket::set_send_buffer_size(int size) noexcept {
+Result<> Socket::set_send_buffer_size(int size) noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   if (::setsockopt(fd_, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size)) < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::SetSockOptFailed));
+    return Err(Error::from_errno("Failed to set send buffer size"));
   }
   return Ok<>();
 }
 
-SocketResult<SocketAddress> Socket::local_address() const noexcept {
+Result<SocketAddress> Socket::local_address() const noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   SocketAddress addr = SocketAddress::any_ipv4(0);  // 臨時物件
   if (::getsockname(fd_, addr.raw(), addr.length_ptr()) < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::GetSockNameFailed));
+    return Err(Error::from_errno("Failed to get socket local address"));
   }
   return Ok(addr);
 }
 
-SocketResult<SocketAddress> Socket::remote_address() const noexcept {
+Result<SocketAddress> Socket::remote_address() const noexcept {
   if (!is_valid()) {
-    return Err(SocketError{SocketErrorCode::InvalidState});
+    return Err(Error::from_errc(std::errc::bad_file_descriptor,
+                                "Socket is in invalid state"));
   }
 
   SocketAddress addr = SocketAddress::any_ipv4(0);  // 臨時物件
   if (::getpeername(fd_, addr.raw(), addr.length_ptr()) < 0) {
-    return Err(SocketError::from_errno(SocketErrorCode::GetPeerNameFailed));
+    return Err(Error::from_errno("Failed to get socket remote address"));
   }
   return Ok(addr);
 }

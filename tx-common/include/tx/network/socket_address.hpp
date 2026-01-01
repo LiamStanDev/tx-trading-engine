@@ -9,13 +9,10 @@
 #include <cstring>
 #include <string>
 #include <string_view>
-#include <tx/core/result.hpp>
-#include <tx/network/address_error.hpp>
+
+#include "tx/core/result.hpp"
 
 namespace tx::network {
-
-template <typename T>
-using AddressResult = Result<T, AddressError>;
 
 /// @brief Socket 地址封裝，用於方便切換網路序與主機序
 /// @warning 尚未支持 IPv6
@@ -27,21 +24,20 @@ class SocketAddress {
     sockaddr_in addr4_;
     sockaddr_in6 addr6_;
   };
-  socklen_t length_;
+  socklen_t length_ = 0;
 
-  SocketAddress() : length_(0) { std::memset(&addr6_, 0, sizeof(addr6_)); }
+  SocketAddress() { std::memset(&addr6_, 0, sizeof(addr6_)); }
 
  public:
   /// @brief 從 IPv4 建立
   /// @param ip IP 地址字串 (e.g. "127.0.0.1")
   /// @param port 埠號 (主機位元序)
-  static AddressResult<SocketAddress> from_ipv4(std::string_view ip,
-                                                uint16_t port) noexcept;
+  static Result<SocketAddress> from_ipv4(std::string_view ip,
+                                         uint16_t port) noexcept;
 
   /// @brief 從字串建立 (格式: "IP:PORT")
   /// @param address 位址字串 (e.g. "127.0.0.1:8080")
-  static AddressResult<SocketAddress> from_string(
-      std::string_view address) noexcept;
+  static Result<SocketAddress> from_string(std::string_view address) noexcept;
 
   /// @brief 建立任意位置 (綁定所有網卡)
   /// @param port 埠號

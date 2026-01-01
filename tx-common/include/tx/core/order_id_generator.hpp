@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "tx/core/order_id.hpp"
+
 namespace tx::core {
 
 class OrderIdGenerator {

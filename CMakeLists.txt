@@ -31,19 +31,13 @@ option(TX_BUILD_TESTS "Build tests" ON)
 option(TX_BUILD_BENCHMARKS "Build benchmarks" ON)
 option(TX_ENABLE_WARNINGS "Enable compiler warnings" ON)
 option(TX_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
-option(TX_ENABLE_LTO "Enable Link Time Optimization" ON)
+option(TX_ENABLE_LTO "Enable Link Time Optimization" OFF)
 option(TX_ENABLE_CCACHE "Use ccache if available" ON)
 
 # Sanitizers
-if(CMAKE_BUILD_TYPE MATCHES "^(Debug|RelWithDebInfo)$")
-  option(TX_ENABLE_ASAN "Enable AddressSanitizer" ON)
-  option(TX_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" ON)
-  option(TX_ENABLE_TSAN "Enable ThreadSanitizer (mutually exclusive with ASAN)" OFF)
-else()
-  option(TX_ENABLE_ASAN "Enable AddressSanitizer" OFF)
-  option(TX_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
-  option(TX_ENABLE_TSAN "Enable ThreadSanitizer (mutually exclusive with ASAN)" OFF)
-endif()
+option(TX_ENABLE_ASAN "Enable AddressSanitizer" OFF)
+option(TX_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+option(TX_ENABLE_TSAN "Enable ThreadSanitizer (mutually exclusive with ASAN)" OFF)
 
 # Sanitizers 互斥檢查
 if(TX_ENABLE_ASAN AND TX_ENABLE_TSAN)
@@ -86,36 +80,46 @@ add_library(tx::compiler-options ALIAS tx-compiler-options)
 # C++ 標準要求
 target_compile_features(tx-compiler-options INTERFACE cxx_std_20)
 
-# 編譯器警告
 if(TX_ENABLE_WARNINGS)
+  # 1. 通用選項 (GCC 和 Clang 都支援)
   target_compile_options(tx-compiler-options INTERFACE
     -Wall -Wextra
-    # 數值與轉型安全
-    -Wconversion        # 包含部分隱式轉換檢查
-    -Wsign-conversion   # 有符號與無符號轉換（交易系統常見 Bug 來源）
-    -Wdouble-promotion  # 防止 float 被意外提升到 double（影響效能）
-    -Wold-style-cast    # 強制使用 C++ 風格轉型，便於搜索代碼中的轉換
-    -Wuseless-cast      # 檢查代碼冗餘
-    -Wcast-align        # 指標對齊檢查，對處理 SHM 結構至關重要
-
-    # 邏輯與結構安全
-    -Wshadow            # 防止變數遮蔽，減少維護隱患
-    -Wnon-virtual-dtor  # 多載解構子安全性
-    -Woverloaded-virtual # 虛擬函式隱藏檢查
-    -Wnull-dereference  # 靜態分析空指標風險（GCC 6+）
-    -Wlogical-op        # 檢查邏輯運算子誤用
-
-    # 程式碼重複與品質
-    -Wduplicated-cond   # 重複的 if 條件 (GCC 6+)
-    -Wduplicated-branches # 重複的代碼分支 (GCC 7+)
-    -Wmisleading-indentation # 縮排誤導檢查 (GCC 6+)
-    -Wformat=2          # 更嚴格的 printf 格式檢查
+    -Wconversion
+    -Wsign-conversion
+    -Wdouble-promotion
+    -Wold-style-cast
+    -Wcast-align
+    -Wshadow
+    -Wnon-virtual-dtor
+    -Woverloaded-virtual
+    -Wnull-dereference
+    -Wmisleading-indentation
+    -Wformat=2
     $<$<BOOL:${TX_WARNINGS_AS_ERRORS}>:-Werror>
   )
+
+  # 2. GCC 專屬
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(tx-compiler-options INTERFACE
+      -Wuseless-cast
+      -Wlogical-op
+      -Wduplicated-cond
+      -Wduplicated-branches
+    )
+  endif()
+
+  # 3. Clang 專屬
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(tx-compiler-options INTERFACE
+      -Wthread-safety  # 靜態檢查鎖的正確性
+    )
+  endif()
 endif()
 
 # 編譯選項
 target_compile_options(tx-compiler-options INTERFACE
+  # Color
+  -fdiagnostics-color=always # 彩色診斷輸出
   # Debug + Sanitizers
   $<$<CONFIG:Debug>: -g3 -Og -fno-omit-frame-pointer
     $<$<BOOL:${TX_ENABLE_ASAN}>:-fsanitize=address -fno-omit-frame-pointer>
@@ -126,7 +130,7 @@ target_compile_options(tx-compiler-options INTERFACE
   # -march=x86-64-v2  # 支持 SSE4.2, POPCNT (2008+)
   # -march=x86-64-v3  # 支持 AVX2, BMI2 (2013+)
   # -march=x86-64-v4  # 支持 AVX512 (2017+)
-  $<$<CONFIG:Release>: -O3 -march=native -DNDEBUG>
+  $<$<CONFIG:Release>: -O2 -march=native -DNDEBUG>
 )
 # 鏈接選項（Sanitizers 和 LTO）
 target_link_options(tx-compiler-options INTERFACE

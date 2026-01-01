@@ -7,9 +7,10 @@
 #include <cassert>
 #include <cstdint>
 #include <string>
-#include <tx/ipc/ipc_error.hpp>
 #include <type_traits>
 #include <utility>
+
+#include "tx/core/result.hpp"
 
 namespace tx::ipc {
 
@@ -20,11 +21,11 @@ concept SharedMemoryCompatible =
 
 class SharedMemory {
  private:
-  std::string name_;     // SHM 名稱
-  void* addr_{nullptr};  // mmap 返回的地址
-  size_t size_{0};       // 映射大小
-  int fd_{-1};           // SHM 的 file descriptor
-  bool owner_{false};    // 是否為創建者
+  std::string name_;     ///< SHM 名稱
+  void* addr_{nullptr};  ///< mmap 返回的地址
+  size_t size_{0};       ///< 映射大小
+  int fd_{-1};           ///< SHM 的 file descriptor
+  bool owner_{false};    ///< 是否為創建者
 
   explicit SharedMemory(std::string name, void* addr, size_t size, int fd,
                         bool owner) noexcept
@@ -43,12 +44,12 @@ class SharedMemory {
   /// @param size 大小（bytes）
   /// @param mode 權限（預設 0600）
   /// @return SharedMemory 或錯誤
-  static IpcResult<SharedMemory> create(std::string name, size_t size,
-                                        mode_t mode = 0600) noexcept;
+  static Result<SharedMemory> create(std::string name, size_t size,
+                                     mode_t mode = 0600) noexcept;
   /// @brief 打開現有的共享記憶體
   /// @param name SHM 名稱
   /// @return SharedMemory 或錯誤
-  static IpcResult<SharedMemory> open(std::string name) noexcept;
+  static Result<SharedMemory> open(std::string name) noexcept;
 
   // ===============================
   // RAII 管理

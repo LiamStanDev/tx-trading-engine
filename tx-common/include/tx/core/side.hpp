@@ -1,5 +1,6 @@
 #ifndef TX_TRADING_ENGINE_CORE_SIDE_HPP
 #define TX_TRADING_ENGINE_CORE_SIDE_HPP
+
 #include <cstdint>
 #include <optional>
 #include <string_view>

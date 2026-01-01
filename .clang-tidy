@@ -1,91 +1,100 @@
-# 已關閉的檢查說明 (不要在 Checks 中加上註解)：
-#   - readability-identifier-length: 允許短變數名（如 i, j, fd）
-#   - readability-magic-numbers: 允許字面常數
-#   - modernize-use-trailing-return-type: 不強制使用 trailing return type
-#   - cppcoreguidelines-pro-bounds-pointer-arithmetic: 允許指標運算（網路/IPC 需要）
-#   - cppcoreguidelines-pro-type-reinterpret-cast: 允許 reinterpret_cast（底層操作需要）
-#   - readability-function-cognitive-complexity: 不限制函式複雜度
-#   - bugprone-easily-swappable-parameters: 不檢查參數順序
-
-Checks: >
-  bugprone-*,
-  cppcoreguidelines-*,
-  modernize-*,
-  performance-*,
-  readability-*,
-  portability-*,
-  concurrency-*,
-  -readability-identifier-length,
-  -readability-magic-numbers,
-  -cppcoreguidelines-avoid-magic-numbers,
-  -modernize-use-auto,
-  -modernize-use-trailing-return-type,
-  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
-  -cppcoreguidelines-pro-type-reinterpret-cast,
-  -cppcoreguidelines-pro-type-member-init
-  -readability-function-cognitive-complexity,
-  -bugprone-easily-swappable-parameters
-
-# 將警告視為錯誤（強制修正）
-WarningsAsErrors: "*"
-HeaderFilterRegex: ".*/(tx-common|tx-engine)/include/.*"
+---
+Checks: "-*,
+  bugprone-argument-comment,
+  bugprone-assert-side-effect,
+  bugprone-bool-pointer-implicit-conversion,
+  bugprone-dangling-handle,
+  bugprone-forward-declaration-namespace,
+  bugprone-inaccurate-erase,
+  bugprone-redundant-branch-condition,
+  bugprone-string-constructor,
+  bugprone-string-integer-assignment,
+  bugprone-suspicious-memset-usage,
+  bugprone-suspicious-realloc-usage,
+  bugprone-terminating-continue,
+  bugprone-undefined-memory-manipulation,
+  bugprone-unique-ptr-array-mismatch,
+  bugprone-unused-raii,
+  bugprone-use-after-move,
+  bugprone-virtual-near-miss,
+  google-build-explicit-make-pair,
+  google-default-arguments,
+  google-explicit-constructor,
+  google-objc-avoid-nsobject-new,
+  google-readability-casting,
+  google-upgrade-googletest-case,
+  misc-misleading-identifier,
+  misc-homoglyph,
+  modernize-avoid-bind,
+  modernize-concat-nested-namespaces,
+  modernize-loop-convert,
+  modernize-make-shared,
+  modernize-make-unique,
+  modernize-redundant-void-arg,
+  modernize-replace-random-shuffle,
+  modernize-shrink-to-fit,
+  modernize-use-bool-literals,
+  modernize-use-default-member-init,
+  modernize-use-emplace,
+  modernize-use-equals-default,
+  modernize-use-equals-delete,
+  modernize-use-noexcept,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-transparent-functors,
+  readability-redundant-member-init"
+# DISABLED CHECKS:
+# An analysis was done of the following checks and they were deemed to either
+# have too high of a false positive rate, or were redundant/useless (e.g.
+# never fired once in the entirety of chromium). We list them here so that
+# future editors of this file are aware these checks have already been
+# considered and accordingly rejected.
+#                 bugprone-undelegated-constructor
+#                 bugprone-macro-repeated-side-effects
+#                 bugprone-misplaced-operator-in-strlen-in-alloc
+#                 bugprone-misplaced-pointer-arithmetic-in-alloc
+#                 bugprone-multiple-statement-macro
+#                 bugprone-no-escape
+#                 bugprone-posix-return
+#                 bugprone-shared-ptr-array-mismatch
+#                 bugprone-spuriously-wake-up-functions
+#                 bugprone-standalone-empty
+#                 bugprone-stringview-nullptr
+#                 bugprone-suspicious-enum-usage
+#                 bugprone-unhandled-exception-at-new
 CheckOptions:
-  # 命名規範（根據您的專案風格調整）
-  - key: readability-identifier-naming.NamespaceCase
-    value: lower_case
-  - key: readability-identifier-naming.ClassCase
-    value: CamelCase
-  - key: readability-identifier-naming.StructCase
-    value: CamelCase
-  - key: readability-identifier-naming.EnumCase
-    value: CamelCase
-  - key: readability-identifier-naming.FunctionCase
-    value: lower_case
-  - key: readability-identifier-naming.VariableCase
-    value: lower_case
-  - key: readability-identifier-naming.ParameterCase
-    value: lower_case
-  - key: readability-identifier-naming.MemberCase
-    value: lower_case
-  - key: readability-identifier-naming.PrivateMemberSuffix
-    value: "_"
-  - key: readability-identifier-naming.ConstantCase
-    value: UPPER_CASE
-  - key: readability-identifier-naming.ConstexprVariableCase
-    value: UPPER_CASE
-  - key: readability-identifier-naming.GlobalConstantCase
-    value: UPPER_CASE
-  - key: readability-identifier-naming.EnumConstantCase
-    value: UPPER_CASE
-  - key: readability-identifier-naming.TemplateParameterCase
-    value: CamelCase
+  - key: bugprone-assert-side-effect.AssertMacros
+    value: assert,DCHECK
+  - key: bugprone-dangling-handle.HandleClasses
+    value: ::std::basic_string_view;::std::span;::absl::string_view;::base::BasicStringPiece;::base::span
+  - key: bugprone-string-constructor.StringNames
+    value: ::std::basic_string;::std::basic_string_view;::base::BasicStringPiece;::absl::string_view
+  - key: modernize-use-default-member-init.UseAssignment
+    value: 1
+  # crbug.com/1342136, crbug.com/1343915: At times, this check makes
+  # suggestions that break builds. Safe mode allows us to sidestep that.
+  - key: modernize-use-transparent-functors.SafeMode
+    value: 1
+  # This relaxes modernize-use-emplace in some cases; we might want to make it
+  # more aggressive in the future. See discussion on
+  # https://groups.google.com/a/chromium.org/g/cxx/c/noMMTNYiM0w .
+  - key: modernize-use-emplace.IgnoreImplicitConstructors
+    value: 1
+  # Use of `std::ranges::reverse_view` is inconsistent with
+  # Chromium style. Recommend `base::Reversed` instead.
+  - key: modernize-loop-convert.MakeReverseRangeFunction
+    value: base::Reversed
+  - key: modernize-loop-convert.MakeReverseRangeHeader
+    value: base/containers/adapters.h
+  # Exclude some third_party headers from modification as file paths are not
+  # starting from repository root in replacement suggestion.
+  # 'build/linux/debian' excludes system headers as they don't have
+  # appropriate IWYU pragmas.
+  # https://clang.llvm.org/extra/clang-tidy/checks/misc/include-cleaner.html
+  - key: misc-include-cleaner.IgnoreHeaders
+    value: (gmock/gmock|gtest/gtest|third_party|build/linux/debian).*
 
-  # 效能相關
-  - key: performance-move-const-arg.CheckTriviallyCopyableMove
-    value: "false"
-  - key: performance-unnecessary-value-param.AllowedTypes
-    value: "std::function;std::shared_ptr"
-
-  # 可讀性
-  - key: readability-braces-around-statements.ShortStatementLines
-    value: "1"
-  - key: readability-simplify-boolean-expr.ChainedConditionalReturn
-    value: "true"
-  - key: readability-simplify-boolean-expr.ChainedConditionalAssignment
-    value: "true"
-  - key: readability-identifier-length.IgnoredVariableNames
-    value: "fd|i|j|k|n|m|id|ok|ev" # 允許這些短變數名稱
-  - key: readability-identifier-length.MinimumVariableNameLength
-    value: "3"
-
-  # 現代化
-  - key: modernize-use-nullptr.NullMacros
-    value: "NULL"
-  - key: modernize-loop-convert.MinConfidence
-    value: "reasonable"
-
-  # C++ Core Guidelines
-  - key: cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
-    value: "true"
-  - key: cppcoreguidelines-avoid-do-while.IgnoreMacros
-    value: "true"
+ExtraArgs:
+  # b/382774818: disable unknown pragma warnings until we can figure out why
+  # unknown pragmas are being warned about.
+  - -Wno-unknown-pragmas
