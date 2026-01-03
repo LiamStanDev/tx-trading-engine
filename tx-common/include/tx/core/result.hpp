@@ -3,11 +3,10 @@
 
 #include <cassert>
 #include <concepts>
+#include <cstddef>
 #include <type_traits>
 #include <utility>
 #include <variant>
-
-#include "tx/core/error.hpp"
 
 namespace tx::core {
 
@@ -247,10 +246,10 @@ class [[nodiscard]] Result<void, E> {
   // ===========================
   // 構造函數
   // ===========================
-  Result(Ok<void>) noexcept
+  Result(Ok<void>) noexcept  // NOLINT
     requires ValidResultType<void, E>
       : data_(std::in_place_index<0>) {}
-  Result(Err<E> err) noexcept
+  Result(Err<E> err) noexcept  // NOLINT
     requires ValidResultType<void, E>
       : data_(std::in_place_index<1>, std::move(err.error)) {}
 
@@ -322,7 +321,7 @@ using Ok = core::Ok<T>;
 template <typename E>
 using Err = core::Err<E>;
 
-template <typename T = void, typename E = core::Error>
+template <typename T, typename E>
 using Result = core::Result<T, E>;
 
 }  // namespace tx

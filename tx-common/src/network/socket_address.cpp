@@ -10,7 +10,7 @@
 #include <string>
 #include <string_view>
 
-#include "tx/core/error.hpp"
+#include "tx/network/error.hpp"
 
 namespace tx::network {
 
@@ -23,14 +23,12 @@ Result<SocketAddress> SocketAddress::from_ipv4(std::string_view ip,
   // NOTE: 與 C API 交互的字串要使用 NULL TERMINATED
   char ip_buf[INET_ADDRSTRLEN];  // IPv4 最大長度: "255.255.255.255\0" = 16
   if (ip.size() >= sizeof(ip_buf)) {
-    return Err(Error::from_errc(std::errc::invalid_argument,
-                                "IPv4 address too long: " + std::string{ip}));
+    return Err(NetworkError::from(NetworkErrc::INVALID_ADDRESS));
   }
   std::memcpy(ip_buf, ip.data(), ip.size());
   ip_buf[ip.size()] = '\0';  // 這樣比較快
   if (inet_pton(AF_INET, ip_buf, &addr.addr4_.sin_addr) != 1) {
-    return Err(Error::from_errc(std::errc::invalid_argument,
-                                "Invalid IPv4 format: " + std::string{ip}));
+    return Err(NetworkError::from(NetworkErrc::INVALID_ADDRESS));
   }
   addr.length_ = sizeof(sockaddr_in);
   return Ok(addr);
@@ -40,15 +38,13 @@ Result<SocketAddress> SocketAddress::from_string(
     std::string_view address) noexcept {
   // IPv6 檢測（目前不支援）
   if (!address.empty() && address.front() == '[') {
-    return Err(Error::from_errc(std::errc::address_family_not_supported,
-                                "IPv6 not yet supported"));
+    return Err(NetworkError::from(NetworkErrc::ADDRESS_FAMILY_NOT_SUPPORTED));
   }
 
   // 嘗試 IPv4
   auto colon_pos = address.find(':');
   if (colon_pos == std::string_view::npos) {
-    return Err(Error::from_errc(std::errc::invalid_argument,
-                                std::string{address} + " (missing port)"));
+    return Err(NetworkError::from(NetworkErrc::INVALID_PORT));
   }
 
   auto ip = address.substr(0, colon_pos);
@@ -59,16 +55,12 @@ Result<SocketAddress> SocketAddress::from_string(
       std::from_chars(port_str.data(), port_str.data() + port_str.size(), port);
 
   if (ec != std::errc{}) {
-    return Err(Error::from_errc(std::errc::invalid_argument,
-                                "Invalid port: " + std::string{port_str}));
+    return Err(NetworkError::from(NetworkErrc::INVALID_PORT));
   }
 
   // 檢查是否完全解析 (防止 "8080abc" 情況發生)
   if (ptr != port_str.data() + port_str.size()) {
-    return Err(Error::from_errc(
-        std::errc::invalid_argument,
-        fmt::format("Invalid port: {} (contains non-digit characters)",
-                    port_str)));
+    return Err(NetworkError::from(NetworkErrc::INVALID_PORT));
   }
 
   return from_ipv4(ip, port);

@@ -118,8 +118,9 @@ endif()
 
 # 編譯選項
 target_compile_options(tx-compiler-options INTERFACE
-  # Color
   -fdiagnostics-color=always # 彩色診斷輸出
+  -fno-exceptions # 禁止使用異常
+  -fno-rtti # 禁止使用 RTTI
   # Debug + Sanitizers
   $<$<CONFIG:Debug>: -g3 -Og -fno-omit-frame-pointer
     $<$<BOOL:${TX_ENABLE_ASAN}>:-fsanitize=address -fno-omit-frame-pointer>

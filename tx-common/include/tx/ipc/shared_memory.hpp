@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "tx/core/result.hpp"
+#include "tx/ipc/error.hpp"
 
 namespace tx::ipc {
 
@@ -19,6 +19,8 @@ concept SharedMemoryCompatible =
     std::is_trivially_copyable_v<T> &&  // 沒有自定義拷貝/移動構造函數與析構函數
     std::is_standard_layout_v<T>;       // 保證 C 語言的記憶體布局，沒有 virtual
 
+/// @brief POXIS 共享記憶體 RAII 封裝
+/// @note 用於記憶體映射，不提供同步機制
 class SharedMemory {
  private:
   std::string name_;     ///< SHM 名稱
@@ -45,7 +47,7 @@ class SharedMemory {
   /// @param mode 權限（預設 0600）
   /// @return SharedMemory 或錯誤
   static Result<SharedMemory> create(std::string name, size_t size,
-                                     mode_t mode = 0600) noexcept;
+                                     mode_t mode) noexcept;
   /// @brief 打開現有的共享記憶體
   /// @param name SHM 名稱
   /// @return SharedMemory 或錯誤

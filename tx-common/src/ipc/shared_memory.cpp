@@ -6,37 +6,36 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cerrno>
+
 #include "tx/core/result.hpp"
+#include "tx/ipc/error.hpp"
 
 namespace tx::ipc {
 
 Result<SharedMemory> SharedMemory::create(std::string name, size_t size,
                                           mode_t mode) noexcept {
   if (name.empty() || name[0] != '/') {
-    return Err(Error::from_errc(std::errc::invalid_argument,
-                                "SHM name must start with '/'"));
+    return Err(IpcError::from(IpcErrc::INVALID_SHM_NAME));
   }
 
   if (size == 0) {
-    return Err(
-        Error::from_errc(std::errc::invalid_argument, "SHM size cannot be 0"));
+    return Err(IpcError::from(IpcErrc::INVALID_SHM_SIZE));
   }
 
   // O_EXCL: 當已經存在會返回錯誤碼 (默認不會)，但我們必須知道是否是 owner
   // 所以得這樣做
   int fd = ::shm_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, mode);
   if (fd < 0) {
-    return Err(Error::from_errno(fmt::format("Name '{}'", name)));
+    return Err(IpcError::from(IpcErrc::SHM_EXISTED, errno));
   }
 
-  if (::ftruncate(fd, static_cast<ssize_t>(size)) < 0) {
+  if (::ftruncate(fd, static_cast<off_t>(size)) < 0) {
     int saved_errno = errno;
     ::close(fd);
     ::shm_unlink(name.c_str());
 
-    errno = saved_errno;
-    return Err(
-        Error::from_errno(fmt::format("Failed to set SHM size to {}", size)));
+    return Err(IpcError::from(IpcErrc::SHM_CREATE_FAILED, saved_errno));
   }
 
   void* addr = ::mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -46,7 +45,7 @@ Result<SharedMemory> SharedMemory::create(std::string name, size_t size,
     ::shm_unlink(name.c_str());
 
     errno = saved_errno;
-    return Err(Error::from_errno(fmt::format("Failed to mmap SHM: {}", name)));
+    return Err(IpcError::from(IpcErrc::SHM_CREATE_FAILED, saved_errno));
   }
 
   return Ok(SharedMemory(name, addr, size, fd, true));
@@ -54,13 +53,18 @@ Result<SharedMemory> SharedMemory::create(std::string name, size_t size,
 
 Result<SharedMemory> SharedMemory::open(std::string name) noexcept {
   if (name.empty() || name[0] != '/') {
-    return Err(Error::from_errc(std::errc::invalid_argument,
-                                "SHM name must start with '/'"));
+    return Err(IpcError::from(IpcErrc::INVALID_SHM_NAME));
   }
 
   int fd = ::shm_open(name.c_str(), O_RDWR, 0);
   if (fd < 0) {
-    return Err(Error::from_errno(fmt::format("Name '{}'", name)));
+    if (errno == ENOENT) {
+      return Err(IpcError::from(IpcErrc::SHM_NOT_FOUND, errno));
+    }
+    if (errno == EACCES) {
+      return Err(IpcError::from(IpcErrc::SHM_PERMISSION_DENY, errno));
+    }
+    return Err(IpcError::from(IpcErrc::SHM_OPEN_FAILED, errno));
   }
 
   struct stat file_stat;
@@ -69,12 +73,11 @@ Result<SharedMemory> SharedMemory::open(std::string name) noexcept {
     ::close(fd);
 
     errno = saved_errno;
-    return Err(Error::from_errno(fmt::format("Failed to mmap SHM: {}", name)));
+    return Err(IpcError::from(IpcErrc::SHM_OPEN_FAILED, saved_errno));
   }
 
-  if (file_stat.st_size < 0) {
-    return Err(Error::from_errc(std::errc::invalid_argument,
-                                "File size is less then 0"));
+  if (file_stat.st_size <= 0) {
+    return Err(IpcError::from(IpcErrc::INVALID_SHM_SIZE));
   }
 
   size_t size = static_cast<size_t>(file_stat.st_size);
@@ -84,8 +87,7 @@ Result<SharedMemory> SharedMemory::open(std::string name) noexcept {
     int saved_errno = errno;
     ::close(fd);
 
-    errno = saved_errno;
-    return Err(Error::from_errno(fmt::format("Failed to mmap SHM: {}", name)));
+    return Err(IpcError::from(IpcErrc::SHM_OPEN_FAILED, saved_errno));
   }
 
   return Ok(SharedMemory(name, addr, size, fd, false));

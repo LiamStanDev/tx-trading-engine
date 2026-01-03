@@ -4,11 +4,10 @@
 #include <cstddef>
 #include <span>
 
-#include "tx/core/result.hpp"
+#include "tx/network/error.hpp"
+#include "tx/network/socket_address.hpp"
 
 namespace tx::network {
-
-class SocketAddress;
 
 /// @brief RAII Socket 封裝
 /// @details Move-Only type，自動管理 file descriptor 生命週期

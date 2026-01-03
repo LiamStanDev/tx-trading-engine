@@ -10,7 +10,7 @@
 #include <string>
 #include <string_view>
 
-#include "tx/core/result.hpp"
+#include "tx/network/error.hpp"
 
 namespace tx::network {
 
@@ -18,7 +18,7 @@ namespace tx::network {
 /// @warning 尚未支持 IPv6
 class SocketAddress {
  private:
-  // 這邊不考慮 std::variant 因為我們要對其取地址
+  // 這邊不考慮 std::variant 因為我們要對齊取地址
   union {
     sockaddr addr_;
     sockaddr_in addr4_;
