@@ -47,7 +47,7 @@ class SharedMemory {
   /// @param mode 權限（預設 0600）
   /// @return SharedMemory 或錯誤
   static Result<SharedMemory> create(std::string name, size_t size,
-                                     mode_t mode) noexcept;
+                                     mode_t mode = 0600) noexcept;
   /// @brief 打開現有的共享記憶體
   /// @param name SHM 名稱
   /// @return SharedMemory 或錯誤

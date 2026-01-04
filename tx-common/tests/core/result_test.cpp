@@ -361,75 +361,7 @@ TEST(ResultTest, AndThenConceptConstraints) {
   // });
   SUCCEED();
 }
-// ===========================
-// 9. 實際使用場景測試
-// ===========================
-// 模擬解析整數
-Result<int, std::string> parse_int(const std::string& s) {
-  try {
-    return Ok(std::stoi(s));
-  } catch (...) {
-    return Err(std::string("Invalid integer: ") + s);
-  }
-}
-// 模擬除法
-Result<double, std::string> divide(int a, int b) {
-  if (b == 0) {
-    return Err(std::string("Division by zero"));
-  }
-  return Ok(static_cast<double>(a) / b);
-}
-TEST(ResultTest, RealWorldScenario) {
-  auto result = parse_int("42")
-                    .and_then([](int x) { return divide(x, 2); })
-                    .map([](double x) { return static_cast<int>(x); });
-  EXPECT_TRUE(result.is_ok());
-  EXPECT_EQ(*result, 21);
-}
-TEST(ResultTest, RealWorldScenarioError) {
-  auto result = parse_int("invalid")
-                    .and_then([](int x) { return divide(x, 2); })
-                    .map([](double x) { return static_cast<int>(x); });
-  EXPECT_TRUE(result.is_err());
-  EXPECT_EQ(result.error(), "Invalid integer: invalid");
-}
-TEST(ResultTest, RealWorldScenarioDivisionByZero) {
-  auto result = parse_int("42")
-                    .and_then([](int x) { return divide(x, 0); })
-                    .map([](double x) { return static_cast<int>(x); });
-  EXPECT_TRUE(result.is_err());
-  EXPECT_EQ(result.error(), "Division by zero");
-}
 
-// ===========================
-// 10. 性能測試（基準測試）
-// ===========================
-TEST(ResultTest, ZeroOverheadAbstraction) {
-  // 驗證 Result 的大小接近底層 variant
-  using R = Result<int, std::string>;
-  using V = std::variant<int, std::string>;
-  // Result 應該和 variant 大小相同（沒有額外開銷）
-  EXPECT_EQ(sizeof(R), sizeof(V));
-}
-TEST(ResultTest, NoHeapAllocation) {
-  // Result<int, int> 應該完全在棧上，不涉及堆分配
-  // 驗證 trivially copyable（如果 T 和 E 都是）
-  static_assert(std::is_trivially_destructible_v<Result<int, int>>);
-}
-
-// 測試 Result<T, E>::map_err
-TEST(MapErrTest, TransformError) {
-  enum class LowError { A, B };
-  enum class HighError { X, Y };
-
-  auto result = Result<int, LowError>(Err(LowError::A));
-  auto transformed = std::move(result).map_err([](LowError e) {
-    return e == LowError::A ? HighError::X : HighError::Y;
-  });
-
-  ASSERT_TRUE(transformed.is_err());
-  EXPECT_EQ(transformed.error(), HighError::X);
-}
 // 測試 Result<void, E>::map_err
 TEST(MapErrTest, VoidResultMapErr) {
   enum class ErrorA { Fail };

@@ -85,7 +85,7 @@ Result<Socket> Socket::accept(SocketAddress* client_addr) noexcept {
     } while (client_fd < 0 && errno == EINTR);
   }
   if (client_fd < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (errno == EAGAIN) {
       return Err(NetworkError::from(NetworkErrc::WOULDBLOCK, errno));
     }
     return Err(NetworkError::from(NetworkErrc::ACCEPT_FAILED, errno));
@@ -158,7 +158,7 @@ Result<size_t> Socket::send(std::span<const std::byte> data) noexcept {
   } while (n < 0 && errno == EINTR);
 
   if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (errno == EAGAIN) {
       // EAGAIN/EWOULDBLOCK: 非阻塞模式下緩衝區滿了 (linux 下相同)
       // 這非錯誤，而是稍後重試
       return Err(NetworkError::from(NetworkErrc::WOULDBLOCK, errno));
@@ -183,7 +183,7 @@ Result<size_t> Socket::recv(std::span<std::byte> buffer) noexcept {
   } while (n < 0 && errno == EINTR);
 
   if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (errno == EAGAIN) {
       // EAGAIN/EWOULDBLOCK: 非阻塞模式下沒有數據 (linux 下相同)
       // 這非錯誤，而是稍後重試
       return Err(NetworkError::from(NetworkErrc::WOULDBLOCK, errno));
@@ -208,7 +208,7 @@ Result<size_t> Socket::sendto(std::span<const std::byte> data,
   } while (n < 0 && errno == EINTR);
 
   if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (errno == EAGAIN) {
       return Err(NetworkError::from(NetworkErrc::WOULDBLOCK, errno));
     }
     return Err(NetworkError::from(NetworkErrc::SEND_FAILED, errno));
@@ -239,7 +239,7 @@ Result<size_t> Socket::recvfrom(std::span<std::byte> buffer,
   }
 
   if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (errno == EAGAIN) {
       // EAGAIN/EWOULDBLOCK: 非阻塞模式下沒有數據
       // 這非錯誤，而是稍後重試
       return Err(NetworkError::from(NetworkErrc::WOULDBLOCK, errno));

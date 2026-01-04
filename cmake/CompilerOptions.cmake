@@ -109,7 +109,7 @@ target_compile_options(
         # === Debug 配置 ===
         $<$<CONFIG:Debug>:
         -g3 # 最詳細的調試資訊（包含巨集定義）
-        -Og # 優化但保持可調試性（比 -O0 快但不破壞調試）
+        -O0 # 優化但保持可調試性（比 -O0 快但不破壞調試）
         -fno-omit-frame-pointer # 保留 frame pointer（profiling 必要）
         >
         # === RelWithDebInfo 配置 ===

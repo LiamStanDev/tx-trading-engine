@@ -37,13 +37,6 @@ if(ENABLE_LTO AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(STATUS "    LTO Mode: ${LTO_MODE}")
 endif()
 
-message(STATUS "  Enable PGO Generate: ${ENABLE_PGO_GENERATE}")
-message(STATUS "  Enable PGO Use: ${ENABLE_PGO_USE}")
-
-if(ENABLE_PGO_GENERATE OR ENABLE_PGO_USE)
-    message(STATUS "    PGO Profile Directory: ${PGO_PROFILE_DIR}")
-endif()
-
 # ==============================================================================
 # Sanitizer 選項
 # ==============================================================================
@@ -77,25 +70,6 @@ message(STATUS "  Binary: ${CMAKE_BINARY_DIR}")
 # ==============================================================================
 # 重要提示
 # ==============================================================================
-if(ENABLE_PGO_GENERATE)
-    message(STATUS "----------------------------------------")
-    message(STATUS "IMPORTANT: PGO Instrumentation enabled")
-    message(STATUS "  1. Build the project")
-    message(STATUS "  2. Run your application with representative workload")
-
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        message(
-            STATUS
-            "  3. Merge profiles: llvm-profdata merge -output=default.profdata ${PGO_PROFILE_DIR}/*.profraw"
-        )
-    endif()
-
-    message(
-        STATUS
-        "  4. Rebuild with -DENABLE_PGO_GENERATE=OFF -DENABLE_PGO_USE=ON"
-    )
-endif()
-
 if(ENABLE_ASAN OR ENABLE_UBSAN OR ENABLE_TSAN)
     message(STATUS "----------------------------------------")
     message(STATUS "IMPORTANT: Sanitizers enabled")
@@ -103,18 +77,10 @@ if(ENABLE_ASAN OR ENABLE_UBSAN OR ENABLE_TSAN)
     message(STATUS "  Only use in Debug/Testing builds, not in Production")
 endif()
 
-if(
-    CMAKE_BUILD_TYPE STREQUAL "Release"
-    AND NOT ENABLE_LTO
-    AND NOT ENABLE_PGO_USE
-)
+if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT ENABLE_LTO)
     message(STATUS "----------------------------------------")
-    message(STATUS "HINT: Consider enabling LTO or PGO for Release builds")
+    message(STATUS "HINT: Consider enabling LTO for Release builds")
     message(STATUS "  LTO: -DENABLE_LTO=ON (5-15% performance improvement)")
-    message(
-        STATUS
-        "  PGO: -DENABLE_PGO_GENERATE=ON -> run app -> -DENABLE_PGO_USE=ON (10-30% improvement)"
-    )
 endif()
 
 message(STATUS "========================================")

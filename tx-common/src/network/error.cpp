@@ -2,8 +2,6 @@
 
 #include <fmt/format.h>
 
-#include <system_error>
-
 namespace tx::network {
 
 std::string NetworkCategory::message(int ec) const {
@@ -77,29 +75,9 @@ std::string NetworkCategory::message(int ec) const {
   return "Unknown network error";
 }
 
-const NetworkCategory& network_category() noexcept {
+const NetworkCategory& category() noexcept {
   const static NetworkCategory instance;
   return instance;
-}
-
-NetworkError NetworkError::from(NetworkErrc errc) noexcept {
-  return NetworkError(make_error_code(errc));
-}
-
-NetworkError NetworkError::from(NetworkErrc errc, int e) noexcept {
-  return NetworkError(make_error_code(errc), e);
-}
-
-std::string NetworkError::message() const noexcept {
-  std::string header = fmt::format("[{}:{}]: {}", code_.category().name(),
-                                   code_.value(), code_.message());
-
-  if (errno_ == 0) {
-    return header;
-  } else {
-    return fmt::format("{}\n └─▶ errno({}): {}", header, errno_,
-                       std::generic_category().message(errno_));
-  }
 }
 
 }  // namespace tx::network

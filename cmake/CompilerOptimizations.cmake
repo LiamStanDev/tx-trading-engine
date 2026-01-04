@@ -12,36 +12,6 @@
 message(STATUS "Loading CompilerOptimizations module")
 
 # ==============================================================================
-# 互斥檢查：PGO_GENERATE 與 PGO_USE 不應同時啟用
-# ==============================================================================
-if(ENABLE_PGO_GENERATE AND ENABLE_PGO_USE)
-    message(
-        FATAL_ERROR
-        "ENABLE_PGO_GENERATE and ENABLE_PGO_USE are mutually exclusive.\n"
-        "PGO workflow:\n"
-        "  1. Build with -DENABLE_PGO_GENERATE=ON\n"
-        "  2. Run your application with representative workload\n"
-        "  3. Rebuild with -DENABLE_PGO_GENERATE=OFF -DENABLE_PGO_USE=ON"
-    )
-endif()
-
-# ==============================================================================
-# 互斥檢查：PGO 與 Sanitizers 不應同時啟用
-# ==============================================================================
-# 原因：Sanitizer 的 instrumentation 會扭曲 profile 數據
-if(
-    (ENABLE_PGO_GENERATE OR ENABLE_PGO_USE)
-    AND (ENABLE_ASAN OR ENABLE_UBSAN OR ENABLE_TSAN)
-)
-    message(
-        FATAL_ERROR
-        "PGO and Sanitizers are mutually exclusive.\n"
-        "Sanitizer instrumentation will distort profile data.\n"
-        "Please disable Sanitizers when using PGO."
-    )
-endif()
-
-# ==============================================================================
 # LTO (Link Time Optimization) 配置
 # ==============================================================================
 if(ENABLE_LTO)

@@ -17,7 +17,6 @@ BENCH_RELEASE_PRESET := $(PRESET_RELEASE)
 
 # 目錄
 BUILD_DIR := build
-DOCS_DIR := docs
 
 # 工具
 CMAKE := cmake
@@ -57,13 +56,8 @@ help:
 	@echo "  make bench-release   - 執行 benchmark (使用 release)"
 	@echo "  make coverage        - 代碼覆蓋率分析"
 	@echo ""
-	@echo -e "$(COLOR_GREEN)文件命令:$(COLOR_RESET)"
-	@echo "  make doc             - 生成 API 文件"
-	@echo "  make doc-open        - 開啟 API 文件"
-	@echo ""
 	@echo -e "$(COLOR_GREEN)清理命令:$(COLOR_RESET)"
 	@echo "  make clean           - 清理所有建置目錄"
-	@echo "  make clean-doc       - 清理文件目錄"
 	@echo ""
 	@echo -e "$(COLOR_YELLOW)範例:$(COLOR_RESET)"
 	@echo "  make bench ARGS='--benchmark_filter=Price'"
@@ -152,37 +146,6 @@ coverage:
 	@echo -e "  HTML 報告: $(BUILD_DIR)/$(PRESET_COVERAGE)/coverage-html/index.html"
 	@echo -e "  開啟方式: xdg-open $(BUILD_DIR)/$(PRESET_COVERAGE)/coverage-html/index.html"
 
-################################################################################
-# 文件目標
-################################################################################
-
-.PHONY: doc
-doc:
-	@echo -e "$(COLOR_BLUE)[文件] 生成 API 文件$(COLOR_RESET)"
-	@if [ ! -f Doxyfile ]; then \
-		echo -e "$(COLOR_YELLOW)⚠ Doxyfile 不存在，正在生成...$(COLOR_RESET)"; \
-		$(DOXYGEN) -g Doxyfile >/dev/null 2>&1; \
-		sed -i \
-			-e 's|^PROJECT_NAME.*|PROJECT_NAME = "TX Trading Engine"|' \
-			-e 's|^OUTPUT_DIRECTORY.*|OUTPUT_DIRECTORY = $(DOCS_DIR)|' \
-			-e 's|^INPUT .*|INPUT = tx-common/include tx-common/src|' \
-			-e 's|^RECURSIVE.*|RECURSIVE = YES|' \
-			-e 's|^EXTRACT_ALL.*|EXTRACT_ALL = YES|' \
-			-e 's|^GENERATE_LATEX.*|GENERATE_LATEX = NO|' \
-			Doxyfile; \
-	fi
-	@$(DOXYGEN) Doxyfile
-	@echo -e "$(COLOR_GREEN)✓ 文件生成完成: $(DOCS_DIR)/html/index.html$(COLOR_RESET)"
-
-.PHONY: doc-open
-doc-open:
-	@if [ -f $(DOCS_DIR)/html/index.html ]; then \
-		xdg-open $(DOCS_DIR)/html/index.html 2>/dev/null || \
-		open $(DOCS_DIR)/html/index.html 2>/dev/null || \
-		echo -e "$(COLOR_YELLOW)請手動開啟: $(DOCS_DIR)/html/index.html$(COLOR_RESET)"; \
-	else \
-		echo -e "$(COLOR_YELLOW)⚠ 文件不存在，請先執行: make doc$(COLOR_RESET)"; \
-	fi
 
 ################################################################################
 # 清理目標
@@ -193,13 +156,3 @@ clean:
 	@echo -e "$(COLOR_YELLOW)[清理] 移除建置目錄$(COLOR_RESET)"
 	@rm -rf $(BUILD_DIR)
 	@echo -e "$(COLOR_GREEN)✓ 清理完成$(COLOR_RESET)"
-
-.PHONY: clean-doc
-clean-doc:
-	@echo -e "$(COLOR_YELLOW)[清理] 移除文件目錄$(COLOR_RESET)"
-	@rm -rf $(DOCS_DIR)
-	@echo -e "$(COLOR_GREEN)✓ 文件清理完成$(COLOR_RESET)"
-
-.PHONY: clean-all
-clean-all: clean clean-doc
-	@echo -e "$(COLOR_GREEN)✓ 完全清理完成$(COLOR_RESET)"
