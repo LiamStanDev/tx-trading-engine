@@ -6,27 +6,26 @@ add_executable(tx-common-bench)
 # ============================
 # Source files
 # ============================
-target_sources(tx-common-bench
-  PRIVATE
-    ./core/result_bench.cpp
+target_sources(
+    tx-common-bench
+    PRIVATE ./core/result_bench.cpp ./protocols/fix/parser_bench.cpp
 )
 
 # ============================
 # Target 屬性
 # ============================
-target_link_libraries(tx-common-bench
-  PRIVATE
-    tx::common
-    benchmark::benchmark
-    benchmark::benchmark_main
+target_link_libraries(
+    tx-common-bench
+    PRIVATE tx::common benchmark::benchmark benchmark::benchmark_main
 )
 
 # Release 模式優化提示
-if(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
-  message(WARNING
-    "Benchmarks should be built in Release mode for accurate results. "
-    "Current build type: ${CMAKE_BUILD_TYPE}"
-  )
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Release|RelWithDebInfo")
+    message(
+        WARNING
+        "Benchmarks should be built in Release mode for accurate results. "
+        "Current build type: ${CMAKE_BUILD_TYPE}"
+    )
 endif()
 
 # ============================

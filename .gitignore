@@ -2,46 +2,12 @@
 # 建置產物
 # =========================
 build/
-build-*/
-cmake-build-*/
-install/
-# CMake 快取與產物
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-CTestTestfile.cmake
-*.cmake
-# 編譯產物
-*.o
-*.a
-*.so
-*.so.*
-*.dylib
-*.dll
-*.exe
 
 # =========================
 # IDE 與編輯器
 # =========================
 # Visual Studio Code
 .vscode/
-*.code-workspace
-# CLion / IntelliJ
-.idea/
-cmake-build-*/
-# Vim
-*.swp
-*.swo
-*~
-.*.swp
-# Emacs
-*~
-\#*\#
-.\#*
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
 
 # =========================
 # 開發工具
@@ -56,53 +22,6 @@ compile_commands.json
 .clangd/
 
 # =========================
-# 測試與除錯
-# =========================
-# Google Test 產物
-Testing/
-CTestTestfile.cmake
-# 覆蓋率報告
-*.gcda
-*.gcno
-*.gcov
-coverage.info
-coverage-html/
-coverage-filtered.info
-# Sanitizers 報告
-*.asan
-*.tsan
-*.ubsan
-# Valgrind 報告
-*.valgrind
-vgcore.*
-# Core dumps
-core.*
-
-# =========================
-# 文件與日誌
-# =========================
-# Doxygen 生成的文件
-docs/
-Doxyfile
-# 其他文件格式
-*.pdf
-*.html
-# 日誌檔案
-*.log
-*.out
-
-# =========================
-# 套件管理器
-# =========================
-# Conan
-conan.lock
-conanbuildinfo.*
-conaninfo.txt
-graph_info.json
-# vcpkg
-vcpkg_installed/
-
-# =========================
 # 其他
 # =========================
 # 暫存檔案
@@ -114,9 +33,3 @@ vcpkg_installed/
 *.tar
 *.tar.gz
 *.7z
-# 編譯器快取
-*.pch
-*.gch
-# 效能分析
-*.perf
-perf.data*

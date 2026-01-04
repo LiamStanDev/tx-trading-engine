@@ -6,21 +6,21 @@ add_executable(tx-common-tests)
 # ============================
 # Source files
 # ============================
-target_sources(tx-common-tests
-  PRIVATE
-    ./core/price_test.cpp
-    ./core/result_test.cpp
-    ./ipc/shared_memory_test.cpp
+target_sources(
+    tx-common-tests
+    PRIVATE
+        ./core/price_test.cpp
+        ./core/result_test.cpp
+        ./ipc/shared_memory_test.cpp
+        ./protocols/fix/parser_test.cpp
 )
 
 # ============================
 # Target 屬性
 # ============================
-target_link_libraries(tx-common-tests
-  PRIVATE
-    tx::common
-    GTest::gtest
-    GTest::gtest_main
+target_link_libraries(
+    tx-common-tests
+    PRIVATE tx::common GTest::gtest GTest::gtest_main
 )
 
 # ============================
