@@ -20,8 +20,8 @@ target_sources(
         ./src/ipc/error.cpp
         ./src/ipc/shared_memory.cpp
         ./src/protocols/fix/error.cpp
-        ./src/protocols/fix/field.cpp
         ./src/protocols/fix/parser.cpp
+        ./src/protocols/fix/message_builder.cpp
 )
 
 # ============================

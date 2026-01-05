@@ -24,6 +24,7 @@ cpmaddpackage(
     "FMT_INSTALL ON"           # 允許安裝 fmt（供其他專案使用）
     "FMT_DOC OFF"              # 不生成文件
     "FMT_TEST OFF"             # 不編譯 fmt 的測試
+    "BUILD_SHARED_LIBS OFF"    # 強制靜態庫
 )
 
 # ==============================================================================
@@ -38,8 +39,8 @@ if(BUILD_TESTS)
       GIT_TAG v1.14.0
       OPTIONS
         "INSTALL_GTEST OFF"            # 不安裝 gtest（避免污染系統）
-      "gtest_force_shared_crt ON"    # 使用共享 CRT（Windows MSVC 必要）
-      "gtest_disable_pthreads OFF"   # 啟用 pthread 支援（Linux/macOS）
+        "gtest_disable_pthreads OFF"   # 啟用 pthread 支援（Linux/macOS）
+        "BUILD_SHARED_LIBS OFF"        # 強制靜態庫
     )
 
     # 啟用 CTest 測試框架
@@ -68,9 +69,9 @@ if(BUILD_BENCHMARKS)
       GIT_TAG v1.8.3
       OPTIONS
         "BENCHMARK_ENABLE_TESTING OFF"       # 不執行 benchmark 自己的測試
-      "BENCHMARK_ENABLE_GTEST_TESTS OFF"   # 不使用 gtest 測試 benchmark
-      "BENCHMARK_ENABLE_INSTALL OFF"       # 不安裝 benchmark
-      "BENCHMARK_DOWNLOAD_DEPENDENCIES ON" # 自動下載依賴（如 gtest）
+        "BENCHMARK_ENABLE_INSTALL OFF"       # 不安裝 benchmark
+        "BENCHMARK_DOWNLOAD_DEPENDENCIES ON" # 自動下載依賴（如 gtest）
+        "BUILD_SHARED_LIBS OFF"              # 強制靜態庫
     )
 
     message(

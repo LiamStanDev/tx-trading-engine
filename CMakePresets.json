@@ -2,7 +2,18 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "base",
+      "name": "gcc-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "/usr/bin/gcc",
+        "CMAKE_CXX_COMPILER": "/usr/bin/g++",
+        "CMAKE_AR": "/usr/bin/gcc-ar",
+        "CMAKE_RANLIB": "/usr/bin/gcc-ranlib"
+      }
+    },
+    {
+      "name": "clang-base",
       "hidden": true,
       "generator": "Ninja",
       "cacheVariables": {
@@ -14,9 +25,9 @@
     },
     {
       "name": "debug",
-      "displayName": "Clang Debug",
-      "description": "Debug build with Clang + Sanitizers",
-      "inherits": "base",
+      "displayName": "GCC Debug",
+      "description": "Debug build with GCC + Sanitizers",
+      "inherits": "gcc-base",
       "binaryDir": "${sourceDir}/build/debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
@@ -28,14 +39,13 @@
     },
     {
       "name": "relwithdebinfo",
-      "displayName": "Clang RelWithDebInfo",
-      "description": "Release with Debug Info + ThinLTO (testing and profiling)",
-      "inherits": "base",
+      "displayName": "GCC RelWithDebInfo",
+      "description": "Release with Debug Info + LTO (testing and profiling)",
+      "inherits": "gcc-base",
       "binaryDir": "${sourceDir}/build/relwithdebinfo",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "ENABLE_LTO": "ON",
-        "LTO_MODE": "THIN",
         "WARNINGS_AS_ERRORS": "OFF",
         "BUILD_TESTS": "ON",
         "BUILD_BENCHMARKS": "ON"
@@ -43,14 +53,13 @@
     },
     {
       "name": "release",
-      "displayName": "Clang Release",
-      "description": "Full Release build + ThinLTO (maximum optimization)",
-      "inherits": "base",
+      "displayName": "GCC Release",
+      "description": "Full Release build + LTO (maximum optimization)",
+      "inherits": "gcc-base",
       "binaryDir": "${sourceDir}/build/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "ENABLE_LTO": "ON",
-        "LTO_MODE": "THIN",
         "WARNINGS_AS_ERRORS": "OFF",
         "BUILD_TESTS": "OFF",
         "BUILD_BENCHMARKS": "ON"
@@ -58,52 +67,92 @@
     },
     {
       "name": "coverage",
-      "displayName": "Coverage Analysis (Clang)",
-      "description": "Debug build with Clang source-based code coverage",
-      "inherits": "base",
+      "displayName": "Coverage Analysis (GCC)",
+      "description": "Debug build with GCC gcov coverage",
+      "inherits": "gcc-base",
       "binaryDir": "${sourceDir}/build/coverage",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_FLAGS": "-fprofile-instr-generate -fcoverage-mapping",
-        "CMAKE_EXE_LINKER_FLAGS": "-fprofile-instr-generate",
+        "CMAKE_CXX_FLAGS": "--coverage",
+        "CMAKE_EXE_LINKER_FLAGS": "--coverage",
         "ENABLE_ASAN": "OFF",
         "ENABLE_UBSAN": "OFF",
         "ENABLE_TSAN": "OFF",
         "BUILD_TESTS": "ON",
         "BUILD_BENCHMARKS": "OFF"
       }
+    },
+    {
+      "name": "clang-debug",
+      "displayName": "Clang Debug",
+      "description": "Debug build with Clang + Sanitizers",
+      "inherits": "clang-base",
+      "binaryDir": "${sourceDir}/build/clang-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_ASAN": "ON",
+        "ENABLE_UBSAN": "ON",
+        "BUILD_TESTS": "ON",
+        "BUILD_BENCHMARKS": "ON"
+      }
+    },
+    {
+      "name": "clang-relwithdebinfo",
+      "displayName": "Clang RelWithDebInfo",
+      "description": "Release with Debug Info + LTO (testing and profiling)",
+      "inherits": "clang-base",
+      "binaryDir": "${sourceDir}/build/clang-relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "ENABLE_LTO": "ON",
+        "WARNINGS_AS_ERRORS": "OFF",
+        "BUILD_TESTS": "ON",
+        "BUILD_BENCHMARKS": "ON"
+      }
     }
   ],
   "buildPresets": [
     {
       "name": "debug",
-      "displayName": "Build Clang Debug",
+      "displayName": "Build GCC Debug",
       "configurePreset": "debug",
       "jobs": 0
     },
     {
       "name": "relwithdebinfo",
-      "displayName": "Build Clang RelWithDebInfo",
+      "displayName": "Build GCC RelWithDebInfo",
       "configurePreset": "relwithdebinfo",
       "jobs": 0
     },
     {
       "name": "release",
-      "displayName": "Build Clang Release",
+      "displayName": "Build GCC Release",
       "configurePreset": "release",
       "jobs": 0
     },
     {
       "name": "coverage",
-      "displayName": "Build Coverage",
+      "displayName": "Build GCC Coverage",
       "configurePreset": "coverage",
+      "jobs": 0
+    },
+    {
+      "name": "clang-debug",
+      "displayName": "Build Clang Debug",
+      "configurePreset": "clang-debug",
+      "jobs": 0
+    },
+    {
+      "name": "clang-relwithdebinfo",
+      "displayName": "Build Clang RelWithDebInfo",
+      "configurePreset": "clang-relwithdebinfo",
       "jobs": 0
     }
   ],
   "testPresets": [
     {
       "name": "debug",
-      "displayName": "Test Clang Debug",
+      "displayName": "Test GCC Debug",
       "configurePreset": "debug",
       "output": {
         "outputOnFailure": true
@@ -115,7 +164,7 @@
     },
     {
       "name": "relwithdebinfo",
-      "displayName": "Test Clang RelWithDebInfo",
+      "displayName": "Test GCC RelWithDebInfo",
       "configurePreset": "relwithdebinfo",
       "output": {
         "outputOnFailure": true
@@ -123,8 +172,28 @@
     },
     {
       "name": "coverage",
-      "displayName": "Test Coverage",
+      "displayName": "Test GCC Coverage",
       "configurePreset": "coverage",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "clang-debug",
+      "displayName": "Test Clang Debug",
+      "configurePreset": "clang-debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "environment": {
+        "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=0",
+        "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=0"
+      }
+    },
+    {
+      "name": "clang-relwithdebinfo",
+      "displayName": "Test Clang RelWithDebInfo",
+      "configurePreset": "clang-relwithdebinfo",
       "output": {
         "outputOnFailure": true
       }

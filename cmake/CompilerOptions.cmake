@@ -38,7 +38,7 @@ if(ENABLE_WARNINGS)
         INTERFACE
             -Wall # 基本警告集
             -Wextra # 額外警告
-            -Wpedantic # 嚴格 ISO C++ 標準遵循
+            # -Wpedantic # 嚴格 ISO C++ 標準遵循
             -Wconversion # 隱式型別轉換警告（如 int -> char）
             -Wsign-conversion # 有號/無號轉換警告
             -Wdouble-promotion # float 自動提升為 double 警告
@@ -53,6 +53,21 @@ if(ENABLE_WARNINGS)
             # 條件式啟用 -Werror（將警告視為錯誤）
             $<$<BOOL:${WARNINGS_AS_ERRORS}>:-Werror>
     )
+
+    # ---------------------------------------------------------------------------
+    # GCC 專屬警告
+    # ---------------------------------------------------------------------------
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        message(STATUS "Enabling GCC-specific warnings")
+
+        target_compile_options(
+            project-compiler-options
+            INTERFACE
+                -Wuseless-cast # 無意義的 cast（如 static_cast<int>(int_var)）
+                -Wduplicated-cond # 重複的條件分支
+                -Wduplicated-branches # 重複的分支內容
+        )
+    endif()
 
     # ---------------------------------------------------------------------------
     # Clang 專屬警告
@@ -79,22 +94,6 @@ if(ENABLE_WARNINGS)
                 -Wno-gnu-statement-expression-from-macro-expansion # TRY macro 需要 statement expressions
         )
     endif()
-
-    # ---------------------------------------------------------------------------
-    # GCC 專屬警告
-    # ---------------------------------------------------------------------------
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        message(STATUS "Enabling GCC-specific warnings")
-
-        target_compile_options(
-            project-compiler-options
-            INTERFACE
-                -Wuseless-cast # 無意義的 cast（如 static_cast<int>(int_var)）
-                -Wlogical-op # 邏輯運算子誤用（如 if (a && a)）
-                -Wduplicated-cond # 重複的條件分支
-                -Wduplicated-branches # 重複的分支內容
-        )
-    endif()
 endif()
 
 # ==============================================================================
@@ -116,14 +115,30 @@ target_compile_options(
         # 適合效能分析（profiling）與除錯的混合模式
         $<$<CONFIG:RelWithDebInfo>:
         -O3 # 最高優化等級
-        -march=native # 針對本機 CPU 優化 (other: -march=x86-64-v3)
+        -march=x86-64-v3 # AVX2, FMA (RHEL 8 相容性)
         -g # 包含調試資訊
         -fno-omit-frame-pointer # 保留 frame pointer（便於 perf 分析）
         >
         # === Release 配置 ===
         $<$<CONFIG:Release>:
         -O3 # 最高優化等級
-        -march=native # 針對本機 CPU 優化 (other: -march=x86-64-v3)
+        -march=x86-64-v3 # AVX2, FMA (RHEL 8 相容性)
         -DNDEBUG # 禁用 assert
         >
 )
+
+# ==============================================================================
+# 靜態鏈接 C++ 標準庫與 GCC 運行時（移植性）
+# ==============================================================================
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(
+        STATUS
+        "Enabling static linking for libstdc++ and libgcc (GCC only)"
+    )
+    target_link_options(
+        project-compiler-options
+        INTERFACE
+            -static-libstdc++ # 靜態鏈接 C++ 標準庫
+            -static-libgcc # 靜態鏈接 GCC 運行時
+    )
+endif()

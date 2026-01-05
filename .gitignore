@@ -33,3 +33,5 @@ compile_commands.json
 *.tar
 *.tar.gz
 *.7z
+flamegraph.svg
+perf.data*

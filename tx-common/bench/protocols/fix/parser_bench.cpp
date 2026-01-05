@@ -9,11 +9,13 @@ namespace tx::protocols::fix::bench {
 using namespace tx::protocols::fix;
 
 static const std::string FIX_MSG =
-    "8=FIX.4.4\0019=122\00135=D\00134=215\00149=CLIENT\00152=20231010-10:00:"
-    "00\001"
-    "56=SERVER\00111=ID123\00121=1\00154=1\00155=AAPL\00160=20231010-10:00:"
-    "00\001"
-    "40=2\00144=150.00\00138=100\00110=128\001";
+    "8=FIX.4.2\x01"
+    "9=40\x01"
+    "35=D\x01"
+    "49=SENDER\x01"
+    "56=TARGET\x01"
+    "34=1\x01"
+    "10=150\x01";
 
 static void BM_Parser_ValidMessage(benchmark::State& state) {
   Parser parser;

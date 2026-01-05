@@ -5,8 +5,7 @@
 #
 # LTO (Link Time Optimization)：
 #   - 在連結階段進行跨編譯單元優化
-#   - Clang 支援 ThinLTO（平行化，快速）與 Full LTO（優化最佳，較慢）
-#   - GCC 僅支援 Full LTO
+#   - GCC 和 Clang 都使用 Full LTO
 # ==============================================================================
 
 message(STATUS "Loading CompilerOptimizations module")
@@ -25,71 +24,32 @@ if(ENABLE_LTO)
         message(WARNING "LTO not supported by compiler: ${ipo_error}")
         set(ENABLE_LTO OFF CACHE BOOL "LTO not supported" FORCE)
     else()
-        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-            # -------------------------------------------------------------------------
-            # Clang: 支援 ThinLTO 與 Full LTO
-            # -------------------------------------------------------------------------
-            if(LTO_MODE STREQUAL "THIN")
-                message(
-                    STATUS
-                    "Using Clang ThinLTO (faster compilation, good optimization)"
-                )
+        # -------------------------------------------------------------------------
+        # Full LTO 配置（GCC 和 Clang 通用）
+        # -------------------------------------------------------------------------
+        message(STATUS "Using Full LTO for ${CMAKE_CXX_COMPILER_ID}")
 
-                # ThinLTO 需要手動設定編譯與連結選項
-                target_compile_options(
-                    project-compiler-options
-                    INTERFACE $<$<CONFIG:Release>:-flto=thin>
-                )
-                target_link_options(
-                    project-compiler-options
-                    INTERFACE $<$<CONFIG:Release>:-flto=thin>
-                )
-            elseif(LTO_MODE STREQUAL "FULL")
-                message(
-                    STATUS
-                    "Using Clang Full LTO (slower compilation, best optimization)"
-                )
+        # 啟用 CMake 內建的 IPO 支援
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO TRUE)
 
-                # Full LTO 使用 CMake 內建的 IPO 支援
-                set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE
-                    TRUE
-                    PARENT_SCOPE
-                )
-                set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO
-                    TRUE
-                    PARENT_SCOPE
-                )
-            else()
-                message(
-                    FATAL_ERROR
-                    "Invalid LTO_MODE: ${LTO_MODE}. Must be 'THIN' or 'FULL'"
-                )
-            endif()
-        elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-            # -------------------------------------------------------------------------
-            # GCC: 僅支援 Full LTO
-            # -------------------------------------------------------------------------
-            message(STATUS "Using GCC Full LTO")
-
-            # GCC LTO 使用 CMake 內建的 IPO 支援
-            set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE PARENT_SCOPE)
-            set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO
-                TRUE
-                PARENT_SCOPE
-            )
-
-            # GCC LTO 額外選項（可選）
+        # GCC 特定優化：自動平行化 LTO
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
             # -flto=auto：自動偵測可用 CPU 核心數進行平行化
             target_compile_options(
                 project-compiler-options
-                INTERFACE $<$<CONFIG:Release>:-flto=auto>
+                INTERFACE
+                    $<$<CONFIG:Release>:-flto=auto>
+                    $<$<CONFIG:RelWithDebInfo>:-flto=auto>
             )
             target_link_options(
                 project-compiler-options
-                INTERFACE $<$<CONFIG:Release>:-flto=auto>
+                INTERFACE
+                    $<$<CONFIG:Release>:-flto=auto>
+                    $<$<CONFIG:RelWithDebInfo>:-flto=auto>
             )
         endif()
 
-        message(STATUS "LTO/IPO enabled for Release builds")
+        message(STATUS "LTO/IPO enabled for Release and RelWithDebInfo builds")
     endif()
 endif()

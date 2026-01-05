@@ -32,8 +32,9 @@ template <typename T>
 struct Ok {
   T value;
 
-  explicit Ok(T v) noexcept(std::is_nothrow_move_constructible_v<T>)
-      : value(std::move(v)) {}
+  template <typename U>
+    requires std::convertible_to<U, T>
+  explicit Ok(U&& v) noexcept : value(std::forward<U>(v)) {}
 };
 
 /// @brief 錯誤值包裝
@@ -42,8 +43,9 @@ template <typename E>
 struct Err {
   E error;
 
-  explicit Err(E e) noexcept(std::is_nothrow_move_constructible_v<E>)
-      : error(std::move(e)) {}
+  template <typename U>
+    requires std::convertible_to<U, E>
+  explicit Err(U&& e) noexcept : error(std::forward<U>(e)) {}
 };
 
 /// @brief void 特化

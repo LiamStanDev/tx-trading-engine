@@ -28,14 +28,6 @@ inline constexpr int Price = 44;
 
 }  // namespace tags
 
-struct FieldView {
-  int tag;
-  std::string_view value;
-
-  [[nodiscard]] std::optional<int> to_int() const;
-  [[nodiscard]] std::optional<double> to_double() const;
-};
-
 }  // namespace tx::protocols::fix
 
 #endif

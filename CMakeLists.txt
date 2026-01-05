@@ -38,15 +38,7 @@ option(ENABLE_WARNINGS "Enable compiler warnings" ON)
 option(WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 
 # --- 優化選項 ---
-option(ENABLE_LTO "Enable Link Time Optimization" OFF)
-
-# LTO 模式選擇（僅 Clang 有效）
-set(LTO_MODE
-    "THIN"
-    CACHE STRING
-    "LTO mode for Clang: THIN (fast) or FULL (best optimization)"
-)
-set_property(CACHE LTO_MODE PROPERTY STRINGS "THIN" "FULL")
+option(ENABLE_LTO "Enable Link Time Optimization (Full LTO)" OFF)
 
 # --- Sanitizer 選項 ---
 option(ENABLE_ASAN "Enable AddressSanitizer (memory errors)" OFF)

@@ -13,6 +13,8 @@ target_sources(
         ./core/result_test.cpp
         ./ipc/shared_memory_test.cpp
         ./protocols/fix/parser_test.cpp
+        ./protocols/fix/message_builder_test.cpp
+        ./sync/spsc_queue_test.cpp
 )
 
 # ============================

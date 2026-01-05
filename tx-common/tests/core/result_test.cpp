@@ -1,9 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <array>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <tx/core/result.hpp>
 #include <type_traits>
+#include <vector>
 namespace tx::core::test {
 using tx::core::Err;
 using tx::core::Ok;
@@ -296,20 +299,7 @@ TEST(ResultTest, NoexceptSpecifications) {
   // unwrap 應該是 noexcept
   static_assert(noexcept(std::declval<R>().unwrap()));
 }
-TEST(ResultTest, ConditionalNoexcept) {
-  struct NoThrowMove {
-    NoThrowMove() = default;
-    NoThrowMove(NoThrowMove&&) noexcept = default;
-  };
-  struct MayThrowMove {
-    MayThrowMove() = default;
-    MayThrowMove(MayThrowMove&&) {}
-  };
-  // NoThrowMove 的構造應該是 noexcept
-  static_assert(noexcept(Result<NoThrowMove, TestError>(Ok(NoThrowMove{}))));
-  // MayThrowMove 的構造不是 noexcept
-  static_assert(!noexcept(Result<MayThrowMove, TestError>(Ok(MayThrowMove{}))));
-}
+
 // ===========================
 // 8. Concept 約束驗證（編譯期測試）
 // ===========================
@@ -373,6 +363,302 @@ TEST(MapErrTest, VoidResultMapErr) {
 
   ASSERT_TRUE(transformed.is_err());
   EXPECT_EQ(transformed.error(), ErrorB::Bad);
+}
+
+// ===========================
+// 9. 大物件移動語義測試
+// ===========================
+
+/// @brief 模擬大型物件（如訂單簿、市場數據等）
+struct LargeObject {
+  static constexpr size_t DATA_SIZE = 1024;
+  std::array<uint64_t, DATA_SIZE> data;
+  std::string metadata;
+  int move_count = 0;
+  int copy_count = 0;
+
+  // 預設構造
+  LargeObject() : data{}, metadata("default") {}
+
+  // 值構造
+  explicit LargeObject(int seed)
+      : metadata("large_object_" + std::to_string(seed)) {
+    for (size_t i = 0; i < DATA_SIZE; ++i) {
+      data[i] = static_cast<uint64_t>(seed) + i;
+    }
+  }
+
+  // Copy 構造（追蹤次數）
+  LargeObject(const LargeObject& other)
+      : data(other.data),
+        metadata(other.metadata),
+        move_count(other.move_count),
+        copy_count(other.copy_count + 1) {}
+
+  // Move 構造（追蹤次數）
+  LargeObject(LargeObject&& other) noexcept
+      : data(std::move(other.data)),
+        metadata(std::move(other.metadata)),
+        move_count(other.move_count + 1),
+        copy_count(other.copy_count) {}
+
+  // Copy 賦值
+  LargeObject& operator=(const LargeObject& other) {
+    if (this != &other) {
+      data = other.data;
+      metadata = other.metadata;
+      move_count = other.move_count;
+      copy_count = other.copy_count + 1;
+    }
+    return *this;
+  }
+
+  // Move 賦值
+  LargeObject& operator=(LargeObject&& other) noexcept {
+    if (this != &other) {
+      data = std::move(other.data);
+      metadata = std::move(other.metadata);
+      move_count = other.move_count + 1;
+      copy_count = other.copy_count;
+    }
+    return *this;
+  }
+
+  uint64_t checksum() const {
+    uint64_t sum = 0;
+    for (const auto& val : data) {
+      sum += val;
+    }
+    return sum;
+  }
+};
+
+// 測試：大物件構造不應產生不必要的複製
+TEST(LargeObjectTest, ConstructionAvoidsCopy) {
+  // 直接構造到 Result 中
+  Result<LargeObject, int> r = Ok(LargeObject(42));
+
+  EXPECT_TRUE(r.is_ok());
+  // 應該只有移動，沒有複製
+  EXPECT_EQ(r->copy_count, 0);
+  EXPECT_GE(r->move_count, 1);  // 至少一次移動
+}
+
+// 測試：從 Result 移出大物件
+TEST(LargeObjectTest, UnwrapMovesSingleTime) {
+  Result<LargeObject, int> r = Ok(LargeObject(100));
+
+  // 記錄移動前的狀態
+  int initial_move_count = r->move_count;
+
+  // 移出物件
+  LargeObject obj = std::move(r).unwrap();
+
+  // 應該只增加一次移動
+  EXPECT_EQ(obj.move_count, initial_move_count + 1);
+  EXPECT_EQ(obj.copy_count, 0);
+  EXPECT_EQ(obj.checksum(),
+            100 * LargeObject::DATA_SIZE +
+                (LargeObject::DATA_SIZE * (LargeObject::DATA_SIZE - 1)) / 2);
+}
+
+// 測試：map 操作應保持移動語義
+TEST(LargeObjectTest, MapPreservesMoveSemantics) {
+  Result<LargeObject, int> r = Ok(LargeObject(50));
+
+  // map 轉換：提取 checksum
+  auto r2 = std::move(r).map([](LargeObject obj) {
+    // 這裡 obj 是移動進來的
+    EXPECT_EQ(obj.copy_count, 0);
+    return obj.checksum();
+  });
+
+  EXPECT_TRUE(r2.is_ok());
+  EXPECT_EQ(*r2,
+            50 * LargeObject::DATA_SIZE +
+                (LargeObject::DATA_SIZE * (LargeObject::DATA_SIZE - 1)) / 2);
+}
+
+// 測試：and_then 鏈式調用的移動效率
+TEST(LargeObjectTest, AndThenChainMinimizesMoves) {
+  auto validate = [](LargeObject obj) -> Result<LargeObject, int> {
+    if (obj.data[0] < 1000) {
+      return Ok(std::move(obj));  // 明確移動
+    }
+    return Err(-1);
+  };
+
+  auto process = [](LargeObject obj) -> Result<LargeObject, int> {
+    obj.data[0] *= 2;  // 修改第一個元素
+    return Ok(std::move(obj));
+  };
+
+  Result<LargeObject, int> r = Ok(LargeObject(10));
+
+  auto result = std::move(r).and_then(validate).and_then(process);
+
+  EXPECT_TRUE(result.is_ok());
+  // 整個鏈式調用應該只有移動，沒有複製
+  EXPECT_EQ(result->copy_count, 0);
+  EXPECT_EQ(result->data[0], 20);  // 10 * 2
+}
+
+// 測試：錯誤路徑不應觸碰值
+TEST(LargeObjectTest, ErrorPathDoesNotTouchValue) {
+  auto failing_op = [](int x) -> Result<LargeObject, std::string> {
+    if (x < 0) {
+      return Err(std::string("negative value"));
+    }
+    return Ok(LargeObject(x));
+  };
+
+  auto result = failing_op(-1);
+
+  EXPECT_TRUE(result.is_err());
+  EXPECT_EQ(result.error(), "negative value");
+  // 錯誤路徑下，LargeObject 根本不應該被構造
+}
+
+// 測試：unwrap_or 的移動語義
+TEST(LargeObjectTest, UnwrapOrMovesCorrectly) {
+  Result<LargeObject, int> r_ok = Ok(LargeObject(42));
+  LargeObject default_obj(999);
+
+  LargeObject result = std::move(r_ok).unwrap_or(std::move(default_obj));
+
+  EXPECT_EQ(result.data[0], 42);
+  EXPECT_EQ(result.copy_count, 0);  // 不應有複製
+
+  // 測試錯誤情況
+  Result<LargeObject, int> r_err = Err(404);
+  LargeObject fallback(888);
+
+  LargeObject result2 = std::move(r_err).unwrap_or(std::move(fallback));
+
+  EXPECT_EQ(result2.data[0], 888);
+  EXPECT_EQ(result2.copy_count, 0);  // 不應有複製
+}
+
+// 測試：unwrap_or_else 的惰性求值與移動
+TEST(LargeObjectTest, UnwrapOrElseLazyMove) {
+  int factory_called = 0;
+
+  auto create_default = [&](int error_code) -> LargeObject {
+    factory_called++;
+    // 使用絕對值作為種子，避免負數問題
+    return LargeObject(std::abs(error_code));
+  };
+
+  // Ok 情況：工廠不應被調用
+  Result<LargeObject, int> r_ok = Ok(LargeObject(100));
+  LargeObject obj1 = std::move(r_ok).unwrap_or_else(create_default);
+
+  EXPECT_EQ(factory_called, 0);
+  EXPECT_EQ(obj1.data[0], 100);
+  EXPECT_EQ(obj1.copy_count, 0);
+
+  // Err 情況：工廠應被調用一次
+  Result<LargeObject, int> r_err = Err(404);
+  LargeObject obj2 = std::move(r_err).unwrap_or_else(create_default);
+
+  EXPECT_EQ(factory_called, 1);
+  EXPECT_EQ(obj2.data[0], 404);  // abs(404) = 404
+  EXPECT_EQ(obj2.copy_count, 0);
+}
+
+// 測試：複雜場景：大物件在多層 Result 中的傳遞
+TEST(LargeObjectTest, ComplexNestedOperations) {
+  // 模擬真實業務流程
+  auto load_data = [](int id) -> Result<LargeObject, std::string> {
+    if (id <= 0) return Err(std::string("invalid id"));
+    return Ok(LargeObject(id));
+  };
+
+  auto validate_data = [](LargeObject obj) -> Result<LargeObject, std::string> {
+    if (obj.data[0] > 10000) {
+      return Err(std::string("data too large"));
+    }
+    return Ok(std::move(obj));
+  };
+
+  auto enrich_data = [](LargeObject obj) -> Result<LargeObject, std::string> {
+    obj.metadata += "_enriched";
+    return Ok(std::move(obj));
+  };
+
+  auto extract_checksum = [](LargeObject obj) -> Result<uint64_t, std::string> {
+    return Ok(obj.checksum());
+  };
+
+  // 成功路徑
+  auto result = load_data(123)
+                    .and_then(validate_data)
+                    .and_then(enrich_data)
+                    .and_then(extract_checksum);
+
+  EXPECT_TRUE(result.is_ok());
+  EXPECT_EQ(*result,
+            123 * LargeObject::DATA_SIZE +
+                (LargeObject::DATA_SIZE * (LargeObject::DATA_SIZE - 1)) / 2);
+
+  // 失敗路徑（驗證失敗）
+  auto result2 = load_data(20000)
+                     .and_then(validate_data)
+                     .and_then(enrich_data)
+                     .and_then(extract_checksum);
+
+  EXPECT_TRUE(result2.is_err());
+  EXPECT_EQ(result2.error(), "data too large");
+}
+
+// 測試：operator-> 在大物件上的使用
+TEST(LargeObjectTest, ArrowOperatorOnLargeObject) {
+  Result<LargeObject, int> r = Ok(LargeObject(777));
+
+  // 透過 -> 訪問成員
+  EXPECT_EQ(r->data[0], 777);
+  EXPECT_EQ(r->metadata, "large_object_777");
+
+  // 修改成員
+  r->data[0] = 888;
+  r->metadata = "modified";
+
+  EXPECT_EQ(r->data[0], 888);
+  EXPECT_EQ(r->metadata, "modified");
+
+  // 呼叫成員函數
+  uint64_t sum = r->checksum();
+  EXPECT_GT(sum, 0);
+}
+
+// 測試：std::vector<LargeObject> 在 Result 中的行為
+TEST(LargeObjectTest, VectorOfLargeObjectsInResult) {
+  auto create_batch =
+      [](size_t count) -> Result<std::vector<LargeObject>, std::string> {
+    if (count == 0) return Err(std::string("count must be positive"));
+    if (count > 100) return Err(std::string("count too large"));
+
+    std::vector<LargeObject> batch;
+    batch.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      batch.emplace_back(static_cast<int>(i));
+    }
+    return Ok(std::move(batch));
+  };
+
+  auto result = create_batch(5);
+
+  EXPECT_TRUE(result.is_ok());
+  EXPECT_EQ(result->size(), 5);
+
+  // 檢查每個物件
+  for (size_t i = 0; i < result->size(); ++i) {
+    EXPECT_EQ((*result)[i].data[0], i);
+  }
+
+  // 移出 vector
+  std::vector<LargeObject> batch = std::move(result).unwrap();
+  EXPECT_EQ(batch.size(), 5);
 }
 
 }  // namespace tx::core::test

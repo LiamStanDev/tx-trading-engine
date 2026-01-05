@@ -6,9 +6,16 @@
 #include <vector>
 
 #include "tx/protocols/fix/error.hpp"
-#include "tx/protocols/fix/field.hpp"
 
 namespace tx::protocols::fix {
+
+struct FieldView {
+  int tag;
+  std::string_view value;
+
+  [[nodiscard]] std::optional<int> to_int() const;
+  [[nodiscard]] std::optional<double> to_double() const;
+};
 
 struct MessageView {
   std::string_view begin_string;  ///< Tag 8
