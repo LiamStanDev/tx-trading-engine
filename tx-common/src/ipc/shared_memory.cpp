@@ -101,10 +101,7 @@ Result<SharedMemory> SharedMemory::create_huge(std::string name, size_t size,
   }
 
   // hugetlbfs 忽略 MAP_POPULATE，必須實際訪問記憶體才會分配
-  char* ptr = static_cast<char*>(addr);
-  for (size_t offset = 0; offset < actual_size; offset += kHugePageSize) {
-    ptr[offset] = 0;  // 每個 2MB Huge Page 寫入第一個字節
-  }
+  std::memset(addr, 0, actual_size);
 
   return SharedMemory(path, addr, actual_size, fd, true, true);
 }

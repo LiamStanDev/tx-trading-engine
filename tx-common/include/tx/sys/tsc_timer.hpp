@@ -7,7 +7,8 @@
 #include <cstdint>
 #include <exception>
 #include <iostream>
-#include <thread>
+
+#include "tx/sys/cpu_affinity.hpp"
 
 namespace tx::sys {
 
@@ -24,23 +25,33 @@ class TSCTimer {
  public:
   static void calibrate(std::chrono::milliseconds duration =
                             std::chrono::milliseconds(100)) noexcept {
-    auto t1_chrono = std::chrono::high_resolution_clock::now();
-    uint64_t t1_tsc = now();
+    // 綁定到指定 CPU
+    auto _ = CPUAffinity::pin_to_cpu(0);
 
-    // 讓 CPU 跑一陣子
-    std::this_thread::sleep_for(duration);
+    // 多次測量
+    constexpr int iterations = 5;
+    double sum_ns_per_cycle = 0;
 
-    // 紀錄結束狀態
-    uint64_t t2_tsc = now();
-    auto t2_chrono = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < iterations; ++i) {
+      auto t1_chrono = std::chrono::high_resolution_clock::now();
+      uint64_t t1_tsc = now();
 
-    // 計算差異
-    double ns_duration =
-        std::chrono::duration<double, std::nano>(t2_chrono - t1_chrono).count();
-    uint64_t cycles_duration = t2_tsc - t1_tsc;
+      // Busy-wait 而非 sleep
+      auto target = t1_chrono + duration;
+      while (std::chrono::high_resolution_clock::now() < target) {
+        _mm_pause();  // Hint to CPU: we're spinning
+      }
 
-    // 算出比率
-    ns_per_cycle_ = ns_duration / static_cast<double>(cycles_duration);
+      uint64_t t2_tsc = now();
+      auto t2_chrono = std::chrono::high_resolution_clock::now();
+
+      double ns_elapsed =
+          std::chrono::duration<double, std::nano>(t2_chrono - t1_chrono)
+              .count();
+      sum_ns_per_cycle += ns_elapsed / static_cast<double>(t2_tsc - t1_tsc);
+    }
+
+    ns_per_cycle_ = sum_ns_per_cycle / iterations;
     calibrated_ = true;
   }
 

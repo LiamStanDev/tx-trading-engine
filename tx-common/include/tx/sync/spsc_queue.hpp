@@ -103,7 +103,7 @@ class SPSCQueue {
     size_t cur_tail = tail_.load(std::memory_order_relaxed);
     size_t nxt_tail = (cur_tail + 1) & kIndexMask;
 
-    if (nxt_tail == head_.load(std::memory_order_acquire)) [[unlikely]] {
+    if (nxt_tail == head_.load(std::memory_order_relaxed)) [[unlikely]] {
       return false;
     }
 

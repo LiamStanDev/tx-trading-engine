@@ -9,7 +9,9 @@
 namespace tx::core {
 
 // @brief 強類型價格型別，使用定點數表示
-// @defails 內部以 ticks 為單位 1 ticks = 0.01 points (台指期最小跳動)
+//
+// 內部以 ticks 為單位 1 ticks = 0.01 points (台指期最小跳動)
+//
 class Price {
  private:
   int64_t ticks_;
