@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <tx/core/price.hpp>
+#include <tx/core/type.hpp>
 
 namespace tx::core::test {
 

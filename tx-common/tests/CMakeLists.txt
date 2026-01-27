@@ -10,11 +10,12 @@ target_sources(
     tx-common-tests
     PRIVATE
         ./core/price_test.cpp
-        ./core/result_test.cpp
         ./ipc/shared_memory_test.cpp
-        ./protocols/fix/parser_test.cpp
-        ./protocols/fix/message_builder_test.cpp
+        # ./net/taifex/parser_test.cpp
         ./sync/spsc_queue_test.cpp
+        ./io/file_test.cpp
+        ./io/buf_reader_test.cpp
+        ./sys/cpu_affinity_test.cpp
 )
 
 # ============================

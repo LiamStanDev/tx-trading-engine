@@ -16,17 +16,7 @@ project(
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # ==============================================================================
-# CPM.cmake 套件管理器
-# ==============================================================================
-include(CPM)
-
-# 設定 CPM 快取目錄
-if(NOT DEFINED ENV{CPM_SOURCE_CACHE})
-    set(ENV{CPM_SOURCE_CACHE} "$ENV{HOME}/.cache/CPM")
-endif()
-
-# ==============================================================================
-# 專案選項（已移除 TX_ 前綴，變更為通用命名）
+# 專案選項
 # ==============================================================================
 
 # --- 建置選項 ---
@@ -53,9 +43,9 @@ option(
 option(ENABLE_CCACHE "Use ccache if available" ON)
 
 # ==============================================================================
-# 全局 C++ 設定
+# 全局變數
 # ==============================================================================
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -80,6 +70,16 @@ if(ENABLE_CCACHE)
     else()
         message(STATUS "ccache not found, continuing without it")
     endif()
+endif()
+
+# ==============================================================================
+# CPM.cmake 套件管理器 (Note: 需要設定在 ccache 之後，否則很久)
+# ==============================================================================
+include(CPM)
+
+# 設定 CPM 快取目錄
+if(NOT DEFINED ENV{CPM_SOURCE_CACHE})
+    set(ENV{CPM_SOURCE_CACHE} "$ENV{HOME}/.cache/CPM")
 endif()
 
 # ==============================================================================

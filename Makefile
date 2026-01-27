@@ -58,6 +58,15 @@ C_YELLOW := \033[1;33m
 C_RED    := \033[0;31m
 C_BOLD   := \033[1m
 
+# --- 搜尋優化 ---
+FIND_EXCLUDE := -not -path "*/CMakeFiles/*" \
+                -not -path "*/_deps/*" \
+                -not -path "*/.cpm_cache/*" \
+                -not -name "*.py" \
+                -not -name "*.sh" \
+                -not -name "*.cmake" \
+                -not -name "CMake*"
+
 # --- 使用者參數 ---
 # 透過 ARGS 變數傳遞額外參數給程式
 # 範例: make bench ARGS="--benchmark_filter=Price"
@@ -78,9 +87,7 @@ help:
 	@echo "  make <preset>       - 直接建置 (debug, release, relwithdebinfo)"
 	@echo ""
 	@echo -e "$(C_YELLOW)Performance Analysis:$(C_RESET)"
-	@echo "  make profile        - Perf (Stat/Record/Report/Top)"
-	@echo "  make flamegraph     - 生成 SVG 火焰圖"
-	@echo "  make cache-profile  - Valgrind 快取分析"
+	@echo "  make disasm         - 反組譯特定函數"
 	@echo ""
 	@echo -e "$(C_YELLOW)Code Quality:$(C_RESET)"
 	@echo "  make test           - 執行單元測試"
@@ -89,7 +96,6 @@ help:
 	@echo "  make coverage-html  - 程式碼覆蓋率報告（HTML）"
 	@echo ""
 	@echo -e "$(C_YELLOW)Development Tools:$(C_RESET)"
-	@echo "  make disasm         - 反組譯特定函數"
 	@echo "  make clean          - 清除建置目錄"
 	@echo ""
 	@echo -e "$(C_BLUE)參數範例:$(C_RESET)"
@@ -156,10 +162,7 @@ build:
 test:
 	@PRESET=$$(echo "$(PRESETS)" | tr ' ' '\n' | $(FZF) --prompt="選擇測試環境> "); \
 	if [ -z "$$PRESET" ]; then exit 0; fi; \
-	if [ ! -d "$(BUILD_DIR)/$$PRESET" ]; then \
-		echo -e "$(C_YELLOW)建置目錄不存在，開始建置...$(C_RESET)"; \
-		$(MAKE) $$PRESET; \
-	fi; \
+	$(MAKE) $$PRESET; \
 	echo -e "$(C_BLUE)[Test] 執行 $$PRESET 測試$(C_RESET)"; \
 	$(CTEST) --test-dir $(BUILD_DIR)/$$PRESET --output-on-failure
 
@@ -174,17 +177,30 @@ test:
 #   4. 執行並傳遞 ARGS 參數
 .PHONY: bench
 bench:
-	@PRESET=$$(printf "relwithdebinfo\nrelease" | $(FZF) --prompt="選擇建置環境 (Benchmark)> "); \
+	@mkdir -p reports
+	@PRESET=$$(printf "relwithdebinfo\nrelease" | $(FZF) --prompt="選擇環境 (Benchmark)> "); \
 	if [ -z "$$PRESET" ]; then exit 0; fi; \
-	if [ ! -d "$(BUILD_DIR)/$$PRESET" ]; then \
-		echo -e "$(C_YELLOW)建置目錄不存在，開始建置...$(C_RESET)"; \
-		$(MAKE) $$PRESET; \
-	fi; \
-	TARGET=$$(find $(BUILD_DIR)/$$PRESET -type f -name "*bench*" -executable -not -path "*/CMakeFiles/*" -not -path "*/_deps/*" | $(FZF) --prompt="執行 Benchmark> "); \
-	if [ -n "$$TARGET" ]; then \
-		echo -e "$(C_BLUE)[Benchmark] 執行 $$TARGET$(C_RESET)"; \
-		$$TARGET $(ARGS); \
-	fi
+	$(MAKE) $$PRESET; \
+	TARGET_DIR="$(BUILD_DIR)/$$PRESET"; \
+	TARGET=$$(find $$TARGET_DIR -maxdepth 3 -type f -executable $(FIND_EXCLUDE) -name "*bench*" | $(FZF) --prompt="選擇測試程式> "); \
+	if [ -z "$$TARGET" ]; then exit 0; fi; \
+	echo -e "$(C_YELLOW)-------------------------------------------------------$(C_RESET)"; \
+	echo -e "$(C_BOLD)HFT Benchmark + Perf 分析模式$(C_RESET)"; \
+	echo -e " - 直接輸入模式 (支援 Regex)"; \
+	echo -e "$(C_YELLOW)-------------------------------------------------------$(C_RESET)"; \
+	read -p "Filter 關鍵字: " FINAL_FILTER; \
+	SAFE_FILTER=$$(echo "$$FINAL_FILTER" | sed 's/[^a-zA-Z0-9]/_/g'); \
+	[ -z "$$SAFE_FILTER" ] && SAFE_FILTER="all"; \
+	TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
+	OUT_FILE="reports/benchmark_$${SAFE_FILTER}_$${TIMESTAMP}.txt"; \
+	echo -e "\n$(C_BLUE)[HFT-Bench] 執行檔: $$TARGET$(C_RESET)"; \
+	echo -e "$(C_BLUE)[HFT-Bench] 記錄檔: $$OUT_FILE$(C_RESET)"; \
+	echo -e "$(C_YELLOW)-------------------------------------------------------$(C_RESET)"; \
+	perf stat -d -d -d \
+		$$TARGET \
+			--benchmark_filter="$$FINAL_FILTER" \
+			--benchmark_format=console $(ARGS) 2>&1 \
+		| tee $$OUT_FILE
 
 # --- 程式碼覆蓋率分析（終端報告）---
 # 功能: 生成程式碼覆蓋率報告並顯示在終端
@@ -251,99 +267,28 @@ coverage-html:
 		--output-directory $(BUILD_DIR)/coverage/html \
 		--rc branch_coverage=1 \
 		--demangle-cpp \
-		--title "TX Trading Engine Coverage Report" \
+		--title "Engine Coverage Report" \
 		--legend \
 		--ignore-errors source,unused
 	@echo -e "$(C_GREEN)✓ HTML 報告已生成$(C_RESET)"
 	@echo -e "$(C_BLUE)查看報告: file://$(shell pwd)/$(BUILD_DIR)/coverage/html/index.html$(C_RESET)"
 
 ################################################################################
-# 效能分析工具 (Performance Profiling)
+# HFT 效能分析工具 (High-Frequency Trading Performance Profiling)
 ################################################################################
 
-# --- Linux Perf 分析 ---
-# 功能: 使用 Linux perf 進行效能分析
-# 使用方式: make profile
-# 互動流程:
-#   1. 選擇要分析的執行檔
-#   2. 選擇分析模式:
-#      - stat: 顯示統計資訊（CPU cycles, cache-misses, IPC 等）
-#      - record: 記錄執行數據到 perf.data（用於後續分析）
-#      - report: 分析 perf.data 並顯示函數佔用比例
-#      - top: 即時顯示效能熱點（類似 htop）
-# 注意:
-#   - record 需要 sudo 權限
-#   - report/top 會讀取當前目錄的 perf.data（不需要選擇檔案）
-# 範例:
-#   make profile → 選擇 bench → 選擇 record → 生成 perf.data
-#   make profile → 選擇 report → 查看分析結果
 .PHONY: profile
 profile:
 	@TARGET=$$(find $(BUILD_DIR) -type f -executable -not -path "*/CMakeFiles/*" -not -path "*/_deps/*" | $(FZF) --prompt="選擇目標> "); \
 	if [ -z "$$TARGET" ]; then exit 0; fi; \
 	ACTION=$$(echo -e "stat\nrecord\nreport\ntop" | $(FZF) --prompt="Perf Action> "); \
 	case $$ACTION in \
-		"stat")   $(PERF) stat -d $$TARGET $(ARGS) ;; \
+		"stat")   $(PERF) stat -d -d -d $$TARGET $(ARGS) ;; \
 		"record") $(PERF) record -g --call-graph dwarf $$TARGET $(ARGS) ;; \
 		"report") $(PERF) report --hierarchy -M intel ;; \
 		"top")    $(PERF) top -M intel ;; \
 	esac
 
-# --- 火焰圖生成 ---
-# 功能: 將 perf.data 轉換為 SVG 火焰圖
-# 使用方式: make flamegraph
-# 前置條件:
-#   1. 先執行 make profile 並選擇 record 生成 perf.data
-#   2. 安裝 FlameGraph 工具: git clone https://github.com/brendangregg/FlameGraph.git
-#   3. 將 FlameGraph 目錄加入 PATH
-# 輸出: flamegraph.svg
-# 火焰圖解讀:
-#   - X 軸寬度: 該函數佔用的 CPU 時間（樣本數）
-#   - Y 軸高度: 呼叫堆疊深度
-#   - 顏色: 僅用於區分，無特殊意義
-# 使用場景: 視覺化效能瓶頸，快速找出最耗時的函數
-.PHONY: flamegraph
-flamegraph:
-	@if [ ! -f "perf.data" ]; then \
-		echo -e "$(C_RED)錯誤: 找不到 perf.data$(C_RESET)"; \
-		echo -e "$(C_YELLOW)請先執行: make profile 並選擇 record$(C_RESET)"; \
-		exit 1; \
-	fi
-	@if ! command -v stackcollapse-perf.pl > /dev/null 2>&1; then \
-		echo -e "$(C_RED)錯誤: 未安裝 FlameGraph 工具$(C_RESET)"; \
-		echo -e "$(C_YELLOW)安裝方式: git clone https://github.com/brendangregg/FlameGraph.git$(C_RESET)"; \
-		echo -e "$(C_YELLOW)          並將路徑加入 PATH$(C_RESET)"; \
-		exit 1; \
-	fi
-	@echo -e "$(C_BLUE)正在生成火焰圖...$(C_RESET)"
-	@$(PERF) script | stackcollapse-perf.pl | flamegraph.pl > flamegraph.svg
-	@echo -e "$(C_GREEN)✓ 已生成 flamegraph.svg$(C_RESET)"
-
-# --- Valgrind 快取分析 ---
-# 功能: 分析程式的 Cache 命中率與分支預測效率
-# 使用方式: make cache-profile ARGS="program arguments"
-# 互動流程: 選擇要分析的執行檔
-# 技術:
-#   - cachegrind: 模擬 L1/L2/L3 快取行為
-#   - branch-sim: 模擬分支預測器
-#   - cg_annotate: 標註每行程式碼的 cache miss 數量
-# 輸出:
-#   - I refs: 指令讀取次數
-#   - D refs: 資料存取次數
-#   - D1 misses: L1 資料快取未命中率
-#   - LL misses: Last Level Cache 未命中率
-# 使用場景:
-#   - 優化資料結構的記憶體局部性
-#   - 找出 cache-unfriendly 的程式碼
-#   - 改善分支預測失敗率
-# 注意: Cachegrind 會顯著降低執行速度（約 10-50x）
-.PHONY: cache-profile
-cache-profile:
-	@TARGET=$$(find $(BUILD_DIR) -type f -executable -not -path "*/CMakeFiles/*" | $(FZF) --prompt="選擇分析目標> "); \
-	if [ -n "$$TARGET" ]; then \
-		$(VALGRIND) --tool=cachegrind --branch-sim=yes ./$$TARGET $(ARGS); \
-		cg_annotate --auto=yes cachegrind.out.* | less; \
-	fi
 
 ################################################################################
 # 開發工具 (Development Tools)
@@ -354,7 +299,7 @@ cache-profile:
 # 使用方式: make disasm
 # 互動流程:
 #   1. 選擇執行檔
-#   2. 選擇函數（預設過濾 tx:: 命名空間，可搜尋其他函數）
+#   2. 選擇函數（可搜尋其他函數）
 #      - 若不選擇函數，顯示整個執行檔的反組譯
 # 技術:
 #   - nm -C: 列出所有符號並 demangle C++ 名稱
@@ -371,21 +316,15 @@ cache-profile:
 #   - q: 退出
 .PHONY: disasm
 disasm:
-	@TARGET=$$(find $(BUILD_DIR) -type f -executable -not -path "*/CMakeFiles/*" | $(FZF) --prompt="選擇執行檔> "); \
+	@TARGET=$$(find $(BUILD_DIR) -type f -executable $(FIND_EXCLUDE) -not -name "*.bin" | $(FZF) --prompt="選擇反組譯目標> "); \
 	if [ -z "$$TARGET" ]; then echo "取消選擇"; exit 0; fi; \
-	FUNC=$$($(NM) $$TARGET | grep -E ' [TtWw] ' | awk '{$$1=$$2=""; print substr($$0,3)}' | $(FZF) --prompt="選擇函數> " --query="tx::"); \
+	FUNC=$$($(NM) $$TARGET | grep -E ' [TtWw] ' | awk '{$$1=$$2=""; print substr($$0,3)}' | $(FZF) --prompt="選擇函數> "); \
 	if [ -z "$$FUNC" ]; then \
-		echo -e "$(C_BLUE)[Disasm] 顯示完整執行檔的反組譯$(C_RESET)"; \
+		echo -e "$(C_BLUE)[Disasm] 顯示完整反組譯: $$TARGET$(C_RESET)"; \
 		$(OBJDUMP) $$TARGET | less -R; \
 	else \
-		echo -e "$(C_BLUE)[Disasm] 反組譯函數: $$FUNC$(C_RESET)"; \
-		OUTPUT=$$($(OBJDUMP) $$TARGET | awk -v fname="$$FUNC" 'index($$0, "<"fname">:") {flag=1} flag {print} /^[0-9a-f]+[[:space:]]+</ && flag && !index($$0, "<"fname">:") {exit}'); \
-		if [ -z "$$OUTPUT" ]; then \
-			echo -e "$(C_RED)錯誤: 找不到函數 '$$FUNC' 的組合語言$(C_RESET)"; \
-			echo -e "$(C_YELLOW)提示: 確認函數名稱完全匹配（包含參數類型）$(C_RESET)"; \
-		else \
-			echo "$$OUTPUT" | less -R; \
-		fi; \
+		echo -e "$(C_BLUE)[Disasm] 函數: $$FUNC$(C_RESET)"; \
+		$(OBJDUMP) $$TARGET | awk -v fname="$$FUNC" 'index($$0, "<"fname">:") {flag=1} flag {print} /^[0-9a-f]+[[:space:]]+</ && flag && !index($$0, "<"fname">:") {exit}' | less -R; \
 	fi
 
 # --- 清除建置目錄 ---

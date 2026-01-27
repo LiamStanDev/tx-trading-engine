@@ -4,7 +4,7 @@
 #include <atomic>
 #include <cstdint>
 
-#include "tx/core/order_id.hpp"
+#include "tx/core/type.hpp"
 
 namespace tx::core {
 

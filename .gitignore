@@ -35,3 +35,4 @@ compile_commands.json
 *.7z
 flamegraph.svg
 perf.data*
+reports

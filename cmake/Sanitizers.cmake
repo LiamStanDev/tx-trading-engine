@@ -145,11 +145,8 @@ if(ENABLE_TSAN)
 endif()
 
 # ==============================================================================
-# Sanitizer 組合建議
+# Sanitizer 組合
 # ==============================================================================
 if(ENABLE_ASAN AND ENABLE_UBSAN)
-    message(
-        STATUS
-        "ASAN + UBSAN enabled (recommended combination for comprehensive testing)"
-    )
+    message(STATUS "ASAN + UBSAN enabled")
 endif()

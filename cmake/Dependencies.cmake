@@ -21,7 +21,7 @@ cpmaddpackage(
   GIT_TAG 12.1.0
   GITHUB_REPOSITORY fmtlib/fmt
   OPTIONS
-    "FMT_INSTALL ON"           # 允許安裝 fmt（供其他專案使用）
+    "FMT_INSTALL OFF"           # 允許安裝 fmt（供其他專案使用）
     "FMT_DOC OFF"              # 不生成文件
     "FMT_TEST OFF"             # 不編譯 fmt 的測試
     "BUILD_SHARED_LIBS OFF"    # 強制靜態庫
@@ -70,7 +70,7 @@ if(BUILD_BENCHMARKS)
       OPTIONS
         "BENCHMARK_ENABLE_TESTING OFF"       # 不執行 benchmark 自己的測試
         "BENCHMARK_ENABLE_INSTALL OFF"       # 不安裝 benchmark
-        "BENCHMARK_DOWNLOAD_DEPENDENCIES ON" # 自動下載依賴（如 gtest）
+        "BENCHMARK_DOWNLOAD_DEPENDENCIES OFF" # 自動下載依賴（如 gtest）
         "BUILD_SHARED_LIBS OFF"              # 強制靜態庫
     )
 

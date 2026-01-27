@@ -10,18 +10,17 @@ add_library(tx::common ALIAS tx-common)
 target_sources(
     tx-common
     PRIVATE
-        ./src/core/context_error.cpp
-        ./src/core/price.cpp
-        ./src/network/error.cpp
-        ./src/network/socket_address.cpp
-        ./src/network/socket.cpp
-        ./src/network/tcp_socket.cpp
-        ./src/network/udp_socket.cpp
-        ./src/ipc/error.cpp
+        ./src/error.cpp
+        ./src/core/type.cpp
+        ./src/io/socket_address.cpp
+        ./src/io/socket.cpp
+        ./src/io/tcp_socket.cpp
+        ./src/io/udp_socket.cpp
+        ./src/io/file.cpp
+        ./src/io/mapped_file.cpp
+        ./src/io/buf_reader.cpp
         ./src/ipc/shared_memory.cpp
-        ./src/protocols/fix/error.cpp
-        ./src/protocols/fix/parser.cpp
-        ./src/protocols/fix/message_builder.cpp
+        ./src/sys/cpu_affinity.cpp
 )
 
 # ============================
@@ -36,7 +35,7 @@ target_include_directories(
 )
 
 # 鏈接編譯器選項 (使用 PUBLIC 所以後續依賴的都會引入)
-target_link_libraries(tx-common PUBLIC project::compiler-options fmt::fmt)
+target_link_libraries(tx-common PRIVATE project::compiler-options fmt::fmt)
 
 # ============================
 # 測試

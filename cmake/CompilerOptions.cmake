@@ -19,12 +19,6 @@ add_library(project-compiler-options INTERFACE)
 add_library(project::compiler-options ALIAS project-compiler-options)
 
 # ==============================================================================
-# C++ 標準要求
-# ==============================================================================
-# 使用 compile_features 而非 CMAKE_CXX_STANDARD 可確保跨編譯器一致性
-target_compile_features(project-compiler-options INTERFACE cxx_std_20)
-
-# ==============================================================================
 # 編譯器警告設定
 # ==============================================================================
 if(ENABLE_WARNINGS)
@@ -121,9 +115,10 @@ target_compile_options(
         >
         # === Release 配置 ===
         $<$<CONFIG:Release>:
-        -O3 # 最高優化等級
-        -march=x86-64-v3 # AVX2, FMA (RHEL 8 相容性)
+        -O2 # 最高優化等級
+        -march=x86-64-v3 # AVX2, FMA
         -DNDEBUG # 禁用 assert
+        # -fopt-info-vec-optimized # 迴圈向量化提示
         >
 )
 

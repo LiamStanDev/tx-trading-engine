@@ -40,8 +40,7 @@ TEST(SPSCQueueTest, PushCopy) {
 
 TEST(SPSCQueueTest, Emplace) {
   SPSCQueue<std::string, 8> queue;
-  EXPECT_TRUE(
-      queue.try_emplace(static_cast<size_t>(5), '!'));  // std::string(5, '!')
+  EXPECT_TRUE(queue.try_emplace(5, '!'));  // std::string(5, '!')
   auto value = queue.try_pop();
   ASSERT_TRUE(value.has_value());
   EXPECT_EQ(*value, "!!!!!");
@@ -59,6 +58,7 @@ TEST(SPSCQueueTest, FullQueue) {
   // 第 8 個應該失敗（佇列已滿）
   EXPECT_FALSE(queue.try_push(999));
 }
+
 TEST(SPSCQueueTest, EmptyQueue) {
   Queue queue;
   auto value = queue.try_pop();
@@ -66,6 +66,7 @@ TEST(SPSCQueueTest, EmptyQueue) {
   int out;
   EXPECT_FALSE(queue.try_pop(out));
 }
+
 TEST(SPSCQueueTest, WrapAround) {
   Queue queue;
   // 測試 Ring Buffer 循環
@@ -119,7 +120,7 @@ TEST(SPSCQueueTest, CapacityIsPowerOfTwo) {
   SPSCQueue<int, 4> q4;
   SPSCQueue<int, 1024> q1024;
   // 以下應該編譯失敗（取消註解測試）:
-  // SPSCQueue<int, 3> q3;      // ❌ 不是 2 的冪次
+  // SPSCQueue<int, 3> q3;  // ❌ 不是 2 的冪次
   // SPSCQueue<int, 100> q100;  // ❌ 不是 2 的冪次
 }
 
