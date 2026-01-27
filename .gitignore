@@ -36,3 +36,4 @@ compile_commands.json
 flamegraph.svg
 perf.data*
 reports
+.gdb_history
