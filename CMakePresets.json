@@ -9,7 +9,9 @@
         "CMAKE_C_COMPILER": "/usr/bin/gcc",
         "CMAKE_CXX_COMPILER": "/usr/bin/g++",
         "CMAKE_AR": "/usr/bin/gcc-ar",
-        "CMAKE_RANLIB": "/usr/bin/gcc-ranlib"
+        "CMAKE_RANLIB": "/usr/bin/gcc-ranlib",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-linux"
       }
     },
     {
@@ -20,7 +22,9 @@
         "CMAKE_C_COMPILER": "/usr/bin/clang",
         "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
         "CMAKE_AR": "/usr/bin/llvm-ar",
-        "CMAKE_RANLIB": "/usr/bin/llvm-ranlib"
+        "CMAKE_RANLIB": "/usr/bin/llvm-ranlib",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-linux"
       }
     },
     {

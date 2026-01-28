@@ -57,8 +57,6 @@ if(CCACHE_PROGRAM)
     message(STATUS "    ccache path: ${CCACHE_PROGRAM}")
 endif()
 
-message(STATUS "  CPM Cache: $ENV{CPM_SOURCE_CACHE}")
-
 # ==============================================================================
 # 建置目錄資訊
 # ==============================================================================

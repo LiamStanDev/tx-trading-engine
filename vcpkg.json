@@ -1,0 +1,18 @@
+{
+  "dependencies": ["benchmark", "fmt", "gtest"],
+  "overrides": [
+    {
+      "name": "fmt",
+      "version": "12.1.0"
+    },
+    {
+      "name": "gtest",
+      "version": "1.17.0"
+    },
+    {
+      "name": "benchmark",
+      "version": "1.9.5"
+    }
+  ],
+  "builtin-baseline": "a2a478a93d582a4b395a4dc4b7052bfcb42c1f8e"
+}

@@ -37,3 +37,5 @@ flamegraph.svg
 perf.data*
 reports
 .gdb_history
+CMakeUserPresets.json
+GEMINI.md
