@@ -38,11 +38,19 @@ class BufReader {
 
   /// @brief 從現有 File 建立
   /// @param file File 物件（會被 move）
-  /// @param capacity buffer 大小（預設 64KB）
   /// @return FileReader 或錯誤
   ///
-  [[nodiscard]] static Result<BufReader> from_file(
-      File file, size_t capacity = kDefaultCapacity) noexcept;
+  /// @note 預設緩衝區大小為 64 KB
+  ///
+  [[nodiscard]] static BufReader from_file(File file) noexcept;
+
+  /// @brief 從現有 File 建立
+  /// @param file File 物件（會被 move）
+  /// @param capacity 緩衝區大小
+  /// @return FileReader 或錯誤
+  ///
+  [[nodiscard]] static BufReader with_capacity(File file,
+                                               size_t capacity) noexcept;
 
   // ----------------------------------------------------------------------------
   // RAII

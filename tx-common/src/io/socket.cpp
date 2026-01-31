@@ -265,7 +265,7 @@ Result<> Socket::join_multicast_group(
     return tx::fail(std::errc::bad_file_descriptor, "Invalid socket");
   }
 
-  const auto* mcast_in_addr = multicast_addr.ipv4_addr();
+  const auto* mcast_in_addr = multicast_addr.addr_ptr();
   if (!mcast_in_addr) {
     return tx::fail(std::errc::invalid_argument, "Invalid multicast address");
   }
@@ -276,7 +276,7 @@ Result<> Socket::join_multicast_group(
     return tx::fail(std::errc::invalid_argument, "Invalid multicast address");
   }
 
-  const auto* iface_in_addr = interface_addr.ipv4_addr();
+  const auto* iface_in_addr = interface_addr.addr_ptr();
   if (!iface_in_addr) {
     return tx::fail(std::errc::invalid_argument, "Invalid interface address");
   }
@@ -300,7 +300,7 @@ Result<> Socket::leave_multicast_group(
     return tx::fail(std::errc::bad_file_descriptor, "Invalid socket");
   }
 
-  const auto* mcast_in_addr = multicast_addr.ipv4_addr();
+  const auto* mcast_in_addr = multicast_addr.addr_ptr();
   if (!mcast_in_addr) {
     return tx::fail(std::errc::invalid_argument, "Invalid multicast address");
   }
@@ -311,7 +311,7 @@ Result<> Socket::leave_multicast_group(
     return tx::fail(std::errc::invalid_argument, "Invalid multicast address");
   }
 
-  const auto* iface_in_addr = interface_addr.ipv4_addr();
+  const auto* iface_in_addr = interface_addr.addr_ptr();
   if (!iface_in_addr) {
     return tx::fail(std::errc::invalid_argument, "Invalid interface address");
   }
@@ -375,7 +375,7 @@ Result<SocketAddress> Socket::local_address() const noexcept {
     return tx::fail(std::errc::bad_file_descriptor, "Invalid socket");
   }
 
-  SocketAddress addr = SocketAddress::any_ipv4(0);  // 臨時物件
+  SocketAddress addr;
   if (::getsockname(fd_, addr.raw(), addr.length_ptr()) < 0) {
     return tx::fail(errno, "getsockname() failed");
   }
@@ -387,7 +387,7 @@ Result<SocketAddress> Socket::remote_address() const noexcept {
     return tx::fail(std::errc::bad_file_descriptor, "Invalid socket");
   }
 
-  SocketAddress addr = SocketAddress::any_ipv4(0);  // 臨時物件
+  SocketAddress addr;
   if (::getpeername(fd_, addr.raw(), addr.length_ptr()) < 0) {
     return tx::fail(errno, "getpeername() failed");
   }

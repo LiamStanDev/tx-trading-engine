@@ -9,10 +9,10 @@ add_executable(tx-common-bench)
 target_sources(
     tx-common-bench
     PRIVATE
-        ./main.cpp
         # ./net/taifex/parser_bench.cpp
         # ./ipc/shared_memory_bench.cpp
         ./sync/spsc_queue_bench.cpp
+    # ./io/file_io_bench.cpp
 )
 
 # ============================
@@ -20,9 +20,7 @@ target_sources(
 # ============================
 target_link_libraries(
     tx-common-bench
-    PRIVATE
-        tx::common
-        benchmark::benchmark # benchmark::benchmark_main
+    PRIVATE tx::common benchmark::benchmark benchmark::benchmark_main
 )
 
 # Release 模式優化提示

@@ -39,6 +39,9 @@ option(
     OFF
 )
 
+# --- Coverage ---
+option(ENABLE_COVERAGE "Enable code coverage flags" OFF)
+
 # --- 開發工具選項 ---
 option(ENABLE_CCACHE "Use ccache if available" ON)
 
@@ -84,34 +87,6 @@ include(Dependencies) # 第三方依賴
 # 子專案
 # ==============================================================================
 add_subdirectory(tx-common)
-
-# ==============================================================================
-# compile_commands.json 符號連結
-# ==============================================================================
-# 自動將 compile_commands.json 放到專案根目錄（方便 LSP 找到）
-if(CMAKE_EXPORT_COMPILE_COMMANDS)
-    set(SOURCE_JSON "${CMAKE_BINARY_DIR}/compile_commands.json")
-    set(TARGET_JSON "${CMAKE_SOURCE_DIR}/compile_commands.json")
-
-    # 在 Configure 階段執行
-    if(NOT EXISTS "${TARGET_JSON}" OR IS_SYMLINK "${TARGET_JSON}")
-        execute_process(
-            COMMAND
-                ${CMAKE_COMMAND} -E create_symlink "${SOURCE_JSON}"
-                "${TARGET_JSON}"
-            RESULT_VARIABLE symlink_result
-        )
-
-        if(symlink_result EQUAL 0)
-            message(STATUS "Created symlink: ${TARGET_JSON} -> ${SOURCE_JSON}")
-        else()
-            message(
-                WARNING
-                "Failed to create symlink for compile_commands.json"
-            )
-        endif()
-    endif()
-endif()
 
 # ==============================================================================
 # 專案資訊輸出

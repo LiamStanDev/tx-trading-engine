@@ -43,9 +43,9 @@ class UdpSocket {
   /// @param interface_addr 網卡地址 (0.0.0.0 = 自動選擇)
   /// @return 成功或錯誤
   /// @details 內部使用 IP_ADD_MEMBERSHIP
-  Result<> join_multicast_group(const SocketAddress& multicast_addr,
-                                const SocketAddress& interface_addr =
-                                    SocketAddress::any_ipv4(0)) noexcept {
+  Result<> join_multicast_group(
+      const SocketAddress& multicast_addr,
+      const SocketAddress& interface_addr = SocketAddress()) noexcept {
     return socket_.join_multicast_group(multicast_addr, interface_addr);
   }
 
@@ -54,9 +54,9 @@ class UdpSocket {
   /// @param interface_addr 網卡地址
   /// @return 成功或錯誤
   /// @details 內部使用 IP_DROP_MEMBERSHIP
-  Result<> leave_multicast_group(const SocketAddress& multicast_addr,
-                                 const SocketAddress& interface_addr =
-                                     SocketAddress::any_ipv4(0)) noexcept {
+  Result<> leave_multicast_group(
+      const SocketAddress& multicast_addr,
+      const SocketAddress& interface_addr = SocketAddress()) noexcept {
     return socket_.leave_multicast_group(multicast_addr, interface_addr);
   }
 

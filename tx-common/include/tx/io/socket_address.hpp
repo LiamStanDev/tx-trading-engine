@@ -6,7 +6,6 @@
 #include <unistd.h>
 
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <string_view>
 
@@ -16,7 +15,7 @@ namespace tx::io {
 
 /// @brief Socket 地址封裝，用於方便切換網路序與主機序
 ///
-/// @warning 尚未支持 IPv6
+/// @note 不支持 IPv6
 ///
 class SocketAddress {
  private:
@@ -24,27 +23,38 @@ class SocketAddress {
   union {
     sockaddr addr_;
     sockaddr_in addr4_;
-    sockaddr_in6 addr6_;
   };
   socklen_t length_ = 0;
 
-  SocketAddress() { std::memset(&addr6_, 0, sizeof(addr6_)); }
-
  public:
+  // ----------------------------------------------------------------------------
+  // Constructors
+  // ----------------------------------------------------------------------------
+
+  /// @brief 建立未初始化的 IPv4 地址
+  ///
+  /// @note 只有有賦值 AF_INET
+  SocketAddress() noexcept;
+
   // ----------------------------------------------------------------------------
   // Factory Methods
   // ----------------------------------------------------------------------------
+
+  /// @brief 建立 IPv6 的默認地址值
+  ///
+  // static SocketAddress default_ipv6() noexcept;
 
   /// @brief 從 IPv4 建立
   /// @param ip IP 地址字串 (e.g. "127.0.0.1")
   /// @param port 埠號 (主機位元序)
   ///
-  static Result<SocketAddress> from_ipv4(std::string_view ip,
-                                         uint16_t port) noexcept;
+  static Result<SocketAddress> from(std::string_view ip,
+                                    uint16_t port) noexcept;
 
   /// @brief 從字串建立 (格式: "IP:PORT")
   /// @param address 位址字串 (e.g. "127.0.0.1:8080")
-  static Result<SocketAddress> from_string(std::string_view address) noexcept;
+  ///
+  static Result<SocketAddress> from(std::string_view address) noexcept;
 
   // ----------------------------------------------------------------------------
   // Queries
@@ -53,15 +63,7 @@ class SocketAddress {
   /// @brief 建立任意位置 (綁定所有網卡)
   /// @param port 埠號
   ///
-  static SocketAddress any_ipv4(uint16_t port) noexcept;
-
-  [[nodiscard]] bool is_ipv4() const noexcept {
-    return addr_.sa_family == AF_INET;
-  }
-
-  [[nodiscard]] bool is_ipv6() const noexcept {
-    return addr_.sa_family == AF_INET6;
-  }
+  static SocketAddress any(uint16_t port) noexcept;
 
   /// @brief 取得底層結構 (給 POSIX API 使用)
   ///
@@ -76,14 +78,15 @@ class SocketAddress {
   [[nodiscard]] socklen_t* length_ptr() noexcept { return &length_; }
 
   /// @brief 取得 IPv4 地址結構（用於 Multicast）
-  /// @return in_addr 指標，如果不是 IPv4 則返回 nullptr
+  /// @return in_addr 指標
   ///
-  [[nodiscard]] const struct in_addr* ipv4_addr() const noexcept {
-    if (addr_.sa_family == AF_INET) {
-      return &addr4_.sin_addr;
-    }
-    return nullptr;
+  [[nodiscard]] const struct in_addr* addr_ptr() const noexcept {
+    return &addr4_.sin_addr;
   }
+
+  /// @brief 取得 ip 字符串
+  ///
+  [[nodiscard]] std::string ip() const noexcept;
 
   /// @brief 取得埠號（主機位元組序）
   ///

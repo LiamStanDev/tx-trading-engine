@@ -15,6 +15,7 @@ target_sources(
         ./sync/spsc_queue_test.cpp
         ./io/file_test.cpp
         ./io/buf_reader_test.cpp
+        ./io/socket_test.cpp
         ./sys/cpu_affinity_test.cpp
 )
 

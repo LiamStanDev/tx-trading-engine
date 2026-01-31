@@ -1,10 +1,3 @@
-/// @file spsc_queue.hpp
-/// @brief 單消費者單生產者環形佇列
-///
-/// @author Liam Lin
-/// @date 2026-01-23
-///
-
 #ifndef TX_TRADING_ENGINE_SYNC_SPSC_QUEUE_HPP
 #define TX_TRADING_ENGINE_SYNC_SPSC_QUEUE_HPP
 
@@ -41,13 +34,13 @@ class SPSCQueue {
 
  public:
   // ----------------------------------------------------------------------------
-  // MARK: 建構函數
+  // 建構函數
   // ----------------------------------------------------------------------------
 
   SPSCQueue() = default;
 
   // ----------------------------------------------------------------------------
-  // MARK: RAII
+  // RAII
   // ----------------------------------------------------------------------------
 
   SPSCQueue(const SPSCQueue&) = delete;
@@ -56,7 +49,7 @@ class SPSCQueue {
   SPSCQueue& operator=(SPSCQueue&&) = delete;
 
   // ----------------------------------------------------------------------------
-  // MARK: 狀態查詢
+  // 狀態查詢
   // ----------------------------------------------------------------------------
 
   [[nodiscard]] size_t capacity() const noexcept { return Capacity; }
@@ -76,7 +69,7 @@ class SPSCQueue {
   }
 
   // ----------------------------------------------------------------------------
-  // MARK: 操作
+  // 操作
   // ----------------------------------------------------------------------------
 
   /// @brief 嘗試推入元素（Move 語義）
@@ -86,7 +79,7 @@ class SPSCQueue {
     size_t cur_tail = tail_.load(std::memory_order_relaxed);
     size_t nxt_tail = (cur_tail + 1) & kIndexMask;
 
-    if (nxt_tail == head_.load(std::memory_order_relaxed)) [[unlikely]] {
+    if (nxt_tail == head_.load(std::memory_order_acquire)) [[unlikely]] {
       return false;
     }
 
@@ -103,7 +96,7 @@ class SPSCQueue {
     size_t cur_tail = tail_.load(std::memory_order_relaxed);
     size_t nxt_tail = (cur_tail + 1) & kIndexMask;
 
-    if (nxt_tail == head_.load(std::memory_order_relaxed)) [[unlikely]] {
+    if (nxt_tail == head_.load(std::memory_order_acquire)) [[unlikely]] {
       return false;
     }
 

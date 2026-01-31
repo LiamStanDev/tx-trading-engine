@@ -1,0 +1,14 @@
+[requires]
+fmt/11.1.1
+gtest/1.17.0
+benchmark/1.9.1
+
+[options]
+*:shared=False # 對所有包禁止 shared 配置
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[layout]
+cmake_layout

@@ -12,6 +12,7 @@ target_sources(
     PRIVATE
         ./src/error.cpp
         ./src/core/type.cpp
+        ./src/bench/latency_recorder.cpp
         ./src/io/socket_address.cpp
         ./src/io/socket.cpp
         ./src/io/tcp_socket.cpp
@@ -35,7 +36,13 @@ target_include_directories(
 )
 
 # 鏈接編譯器選項 (使用 PUBLIC 所以後續依賴的都會引入)
-target_link_libraries(tx-common PRIVATE project::compiler-options fmt::fmt)
+target_link_libraries(
+    tx-common
+    PRIVATE
+        project::compiler-options # 避免依賴也用相同方式編譯
+    PUBLIC
+        fmt::fmt # 因為 hpp 有暴露，故依賴該此庫的都要依賴
+)
 
 # ============================
 # 測試

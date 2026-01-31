@@ -19,6 +19,47 @@ add_library(project-compiler-options INTERFACE)
 add_library(project::compiler-options ALIAS project-compiler-options)
 
 # ==============================================================================
+# Code Coverage 設定
+# ==============================================================================
+if(ENABLE_COVERAGE)
+    # --------------------------------------------------------------------------
+    # 1. 強制檢查 Build Type (關鍵修改)
+    # --------------------------------------------------------------------------
+    # 將 CMAKE_BUILD_TYPE 轉大寫以進行不區分大小寫的比較
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" _uppercase_build_type)
+
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+        message(
+            FATAL_ERROR
+            "Error: Code coverage is enabled but CMAKE_BUILD_TYPE is not 'Debug'.\n"
+            "Coverage analysis requires unoptimized code to produce accurate line\n"
+            "counts. Optimized builds (Release/RelWithDebInfo) generate misleading\n"
+            "reports due to inlining and dead code elimination.\n"
+            "\n"
+            "Current CMAKE_BUILD_TYPE: '${CMAKE_BUILD_TYPE}'\n"
+            "Please configure with: -DCMAKE_BUILD_TYPE=Debug\n"
+        )
+    endif()
+
+    # --------------------------------------------------------------------------
+    # 2. 設定 Compiler Flags
+    # --------------------------------------------------------------------------
+    message(STATUS "Enabling Code Coverage flags (--coverage)")
+
+    target_compile_options(
+        project-compiler-options
+        INTERFACE
+            --coverage # 等同 -fprofile-arcs -ftest-coverage
+    )
+
+    target_link_options(
+        project-compiler-options
+        INTERFACE
+            --coverage # 連結 gcov library
+    )
+endif()
+
+# ==============================================================================
 # 編譯器警告設定
 # ==============================================================================
 if(ENABLE_WARNINGS)
@@ -62,32 +103,6 @@ if(ENABLE_WARNINGS)
                 -Wduplicated-branches # 重複的分支內容
         )
     endif()
-
-    # ---------------------------------------------------------------------------
-    # Clang 專屬警告
-    # ---------------------------------------------------------------------------
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        message(STATUS "Enabling Clang-specific warnings")
-
-        target_compile_options(
-            project-compiler-options
-            INTERFACE
-                # === 執行緒安全分析 ===
-                -Wthread-safety # 基本執行緒安全檢查
-                -Wthread-safety-analysis # 完整分析
-                -Wthread-safety-precise # 精確模式（減少誤報）
-                # === 生命週期與記憶體安全 ===
-                -Wdangling # dangling pointer/reference 警告
-                -Wdangling-field # dangling field initializer（C++20）
-                # === 效能相關警告 ===
-                -Wover-aligned # 過度對齊警告（可能浪費記憶體）
-                -Wpessimizing-move # 不必要的 std::move（會阻礙 RVO）
-                -Wredundant-move # 冗餘的 move（已是 rvalue）
-                -Wreturn-std-move # 建議使用 std::move 的情況
-                # === 允許必要的 GNU extensions ===
-                -Wno-gnu-statement-expression-from-macro-expansion # TRY macro 需要 statement expressions
-        )
-    endif()
 endif()
 
 # ==============================================================================
@@ -115,10 +130,10 @@ target_compile_options(
         >
         # === Release 配置 ===
         $<$<CONFIG:Release>:
-        -O2 # 最高優化等級
+        -O2 # 優化等級
         -march=x86-64-v3 # AVX2, FMA
         -DNDEBUG # 禁用 assert
-        # -fopt-info-vec-optimized # 迴圈向量化提示
+        -fopt-info-vec-optimized # 迴圈向量化提示
         >
 )
 

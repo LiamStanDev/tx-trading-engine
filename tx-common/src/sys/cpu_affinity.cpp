@@ -67,7 +67,7 @@ std::vector<size_t> parse_cpu_range(std::string_view range_str) {
 Result<std::vector<size_t>> read_available_cpus_from_sysfs() {
   std::vector<std::byte> bytes =
       TRY(io::File::open("/sys/devices/system/cpu/online", O_RDONLY)
-              .and_then([](io::File f) {
+              .transform([](io::File f) {
                 return io::BufReader::from_file(std::move(f));
               })
               .and_then([](io::BufReader r) { return r.read_to_end(); }));

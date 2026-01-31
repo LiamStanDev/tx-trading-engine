@@ -1,7 +1,5 @@
 #include "tx/io/udp_socket.hpp"
 
-#include <system_error>
-
 #include "tx/error.hpp"
 
 namespace tx::io {

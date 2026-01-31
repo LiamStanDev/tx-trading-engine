@@ -5,7 +5,6 @@
 #
 # LTO (Link Time Optimization)：
 #   - 在連結階段進行跨編譯單元優化
-#   - GCC 和 Clang 都使用 Full LTO
 # ==============================================================================
 
 message(STATUS "Loading CompilerOptimizations module")

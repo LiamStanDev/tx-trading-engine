@@ -36,10 +36,11 @@ Result<size_t> BufReader::fill_buffer() noexcept {
 // Factory Methods
 // ----------------------------------------------------------------------------
 
-Result<BufReader> BufReader::from_file(File file, size_t capacity) noexcept {
-  if (capacity == 0) {
-    return tx::fail(std::errc::invalid_argument, "Buffer capacity must be > 0");
-  }
+BufReader BufReader::from_file(File file) noexcept {
+  return BufReader(std::move(file), kDefaultCapacity);
+}
+
+BufReader BufReader::with_capacity(File file, size_t capacity) noexcept {
   return BufReader(std::move(file), capacity);
 }
 
