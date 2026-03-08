@@ -41,7 +41,7 @@ perf:
 # 格式化
 .PHONY: format
 format:
-	@find -name "*.cpp" -o -name "*.hpp" -not -path "build" | xargs -I {} clang-format -i {}
+	@fd -e cpp -e hpp -E build -x clang-format -i
 
 # 清理
 .PHONY: clean

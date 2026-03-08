@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.17)
 # 專案定義
 # ==============================================================================
 project(
-    TXTradingEngine
+    Onyx
     VERSION 0.1.0
     DESCRIPTION "Low-latency trading engine for TAIFEX"
     LANGUAGES CXX
@@ -86,7 +86,7 @@ include(Dependencies) # 第三方依賴
 # ==============================================================================
 # 子專案
 # ==============================================================================
-add_subdirectory(tx-common)
+add_subdirectory(common)
 
 # ==============================================================================
 # 專案資訊輸出
