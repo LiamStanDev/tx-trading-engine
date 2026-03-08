@@ -22,9 +22,9 @@ std::optional<ProductSpec> parse_i010(std::span<const std::byte> buffer);
 ///
 /// @param buffer 必須為 I024 訊息格式，內部不會檢查
 /// @param spec_table 商品規格表 (需要用於查詢價格小數點位數)
-/// @return 成功返回 Trade 錯誤返回 nullopt
-std::optional<Trade> parse_i024(std::span<const std::byte> buffer,
-                                const ProductSpecTable& spec_table);
+/// @return 成功返回 TradePacket 錯誤返回 nullopt
+std::optional<TradePacket> parse_i024(std::span<const std::byte> buffer,
+                                      const ProductSpecTable& spec_table);
 
 }  // namespace onyx::net::taifex
 

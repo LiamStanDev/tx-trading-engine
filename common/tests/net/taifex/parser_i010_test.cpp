@@ -35,8 +35,8 @@ std::vector<std::byte> build_i010_buffer(const char* prod_id_s, uint8_t decimal_
     i010->prod_id_s[i] = ' ';
   }
   i010->prod_kind = prod_kind;
-  i010->decimal_locator = decimal_loc;
-  i010->flow_group = flow_group;
+  encode_bcd(&i010->decimal_locator, 1, decimal_loc);
+  encode_bcd(&i010->flow_group, 1, flow_group);
 
   // --- footer ---
   i010->check_sum = 'X';  // 簡化，不計算真實 checksum

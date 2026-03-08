@@ -35,17 +35,25 @@ class ProductSpecTable {
   std::unordered_map<std::string, ProductSpec> table_;
 };
 
+/// @brief 成交價量
+struct TradeMatch {
+  Price price;   ///< 成交價
+  Quantity qty;  ///< 成交量
+};
+
 /// @brief I024 成交信息
-struct Trade {
-  std::array<char, 20> prod_id;         ///< 商品代碼
-  uint64_t prod_msg_seq;                ///< 商品訊商序列號
-  std::chrono::nanoseconds match_time;  ///< 成交時間
-  Price price;                          ///< 成交價
-  Quantity qty;                         ///< 成交量
-  bool is_calculated;                   ///< 是否為試撮
-  Quantity total_qty;                   ///< 累積交易量
-  uint64_t buy_count;                   ///< 累積買進筆數
-  uint64_t sell_count;                  ///< 累積賣出筆數
+struct TradePacket {
+  static inline constexpr size_t MAX_MATCH_SIZE = 71;
+
+  std::array<char, 20> prod_id;                    ///< 商品代碼
+  uint64_t prod_msg_seq;                           ///< 商品訊商序列號
+  std::chrono::nanoseconds match_time;             ///< 成交時間
+  bool is_calculated;                              ///< 是否為試撮
+  Quantity total_qty;                              ///< 累積交易量
+  uint64_t buy_count;                              ///< 累積買進筆數
+  uint64_t sell_count;                             ///< 累積賣出筆數
+  uint8_t match_count;                             ///< 成交價量筆數
+  std::array<TradeMatch, MAX_MATCH_SIZE> matches;  ///< 成交價量
 };
 
 }  // namespace onyx::net::taifex

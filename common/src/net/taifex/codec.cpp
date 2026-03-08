@@ -30,9 +30,13 @@ uint64_t unpack_bcd(std::span<const uint8_t> bcd_bytes) noexcept {
   return res;
 }
 
-/// @brief 將 PACK BCD 格式轉回價格
-Price unpack_bcd_price(std::span<const uint8_t> bcd_bytes, int decimal_places) noexcept {
-  int64_t raw_value = static_cast<int64_t>(unpack_bcd(bcd_bytes));
+Price unpack_bcd_price(std::span<const uint8_t> bcd_bytes, int decimal_places, char sign) noexcept {
+  int64_t raw_value;
+  if (sign == '-') [[unlikely]] {
+    raw_value = -static_cast<int64_t>(unpack_bcd(bcd_bytes));
+  } else {
+    raw_value = static_cast<int64_t>(unpack_bcd(bcd_bytes));
+  }
 
   assert(decimal_places <= 4 && "decimal_places exceeds Price precision");
 

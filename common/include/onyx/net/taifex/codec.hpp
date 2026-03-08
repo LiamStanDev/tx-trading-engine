@@ -25,7 +25,12 @@ void encode_bcd(uint8_t* dst, size_t dst_len, uint64_t val) noexcept;
 uint64_t unpack_bcd(std::span<const uint8_t> bcd_bytes) noexcept;
 
 /// @brief 將 PACK BCD 轉換為 Price (需要知道小數位數)
-Price unpack_bcd_price(std::span<const uint8_t> bcd_bytes, int decimal_places) noexcept;
+///
+/// @param bcd_bytes 待解析位元陣列
+/// @param sign 價格正負號，價格正負號 '0' 正號, '-' 負號(複式商品專用)
+/// @param decimal_places 小數點位數
+Price unpack_bcd_price(std::span<const uint8_t> bcd_bytes, int decimal_places,
+                       char sign = '0') noexcept;
 
 /// @brief 將 PACK BCD 轉換為 chrono 納秒時間戳
 std::chrono::nanoseconds unpack_bcd_time(std::span<const uint8_t> bcd_bytes) noexcept;
