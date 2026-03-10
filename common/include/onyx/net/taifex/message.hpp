@@ -5,6 +5,9 @@
 
 #include <array>
 #include <chrono>
+#include <cstring>
+#include <functional>
+#include <string_view>
 #include <unordered_map>
 
 #include "onyx/core/type.hpp"
@@ -13,11 +16,35 @@ namespace onyx::net::taifex {
 
 using namespace onyx::core;
 
+using ProdIdKey = std::array<char, 10>;
+
 /// @brief I010 商品基本資料（應用層）
 struct ProductSpec {
-  std::array<char, 10> prod_id;  ///< 商品代號（10 bytes，右側填空白）
-  uint8_t flow_group;            ///< 流程群組（1-14）
-  uint8_t decimal_locator;       ///< 價格小數位數（0-4）
+  ProdIdKey prod_id;        ///< 商品代號（10 bytes，右側填空白）
+  uint8_t flow_group;       ///< 流程群組（1-14）
+  uint8_t decimal_locator;  ///< 價格小數位數（0-4）
+};
+
+struct ProdIdHash {
+  [[nodiscard]] size_t operator()(const ProdIdKey& key) const noexcept {
+    // 前 8 bytes
+    uint64_t part1;
+    std::memcpy(&part1, key.data(), 8);
+
+    // 後 2 bytes
+    uint16_t part2;
+    std::memcpy(&part2, key.data() + 8, 2);
+
+    // 使用魔法常數進行乘法混淆，用來將連續或相似的輸入值徹底打散，避免太接近導致 HashMap
+    // 會放在同一個格子
+    size_t h1 = static_cast<size_t>(part1) * 0x9e3779b97f4a7c15ULL;  // 黃金分割率
+    size_t h2 = static_cast<size_t>(part2) * 0xc6a4a7935bd1e995ULL;  // MurmurHash64A 混合數
+
+    // 為什麼不直接 h1 ^ h2？
+    // 如果 h1 和 h2 剛好算出相同的值，XOR 會變成 0，導致碰撞。
+    // 加上常數 (0x9e3779b9) 以及左移 (<< 6)、右移 (>> 2)，
+    return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+  }
 };
 
 /// @brief 商品規格表
@@ -28,11 +55,12 @@ class ProductSpecTable {
 
   /// @brief 查詢商品小數位數
   ///
+  /// @param prod_id 10 bytes 格式的商品代碼
   /// @return 若商品不存在返回 nullopt
-  std::optional<uint8_t> get_decimal_locator(std::string_view prod_id) const noexcept;
+  std::optional<uint8_t> get_decimal_locator(ProdIdKey& prod_id) const noexcept;
 
  private:
-  std::unordered_map<std::string, ProductSpec> table_;
+  std::unordered_map<ProdIdKey, ProductSpec, ProdIdHash> table_;
 };
 
 /// @brief 成交價量

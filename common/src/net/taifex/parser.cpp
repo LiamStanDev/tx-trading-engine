@@ -60,17 +60,12 @@ std::optional<TradePacket> parse_i024(std::span<const std::byte> buffer,
   TradePacket packet;
 
   // --- 解析 packet ---
-  // prod_id 為 10 bytes，若右側空白要 trim
-  std::string_view prod_id_sv(fixed->prod_id, packet.prod_id.size());
-  size_t last = prod_id_sv.find_last_not_of(' ');
-  size_t len = (last == std::string_view::npos) ? 0 : last + 1;
-  prod_id_sv = prod_id_sv.substr(0, len);
-  std::copy_n(prod_id_sv.begin(), len, packet.prod_id.begin());
-  if (len < 10) {
-    std::fill(packet.prod_id.begin() + len, packet.prod_id.end(), 0);
-  }
+  std::memcpy(packet.prod_id.data(), fixed->prod_id, packet.prod_id.size());
+  // -- 查詢使用 10 碼的
+  std::array<char, 10> prod_id_s;
+  std::memcpy(prod_id_s.data(), packet.prod_id.data(), prod_id_s.size());
 
-  auto decimal_locator_opt = spec_table.get_decimal_locator(prod_id_sv);
+  auto decimal_locator_opt = spec_table.get_decimal_locator(prod_id_s);
   if (!decimal_locator_opt) {
     return std::nullopt;
   }

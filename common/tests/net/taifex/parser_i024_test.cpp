@@ -123,7 +123,7 @@ TEST(Parser, ParseI024_SingleTrade) {
   EXPECT_EQ(packet.prod_id[0], 'T');
   EXPECT_EQ(packet.prod_id[1], 'X');
   EXPECT_EQ(packet.prod_id[2], 'F');
-  EXPECT_EQ(packet.prod_id[3], '\0');  // trim 後填充 '\0'
+  EXPECT_EQ(packet.prod_id[3], ' ');  // trim 後填充 '\0'
   EXPECT_EQ(packet.prod_msg_seq, 12345);
   std::chrono::nanoseconds expected_time = std::chrono::hours(9) + std::chrono::seconds(0) +
                                            std::chrono::milliseconds(123) +
@@ -134,7 +134,7 @@ TEST(Parser, ParseI024_SingleTrade) {
   EXPECT_EQ(packet.buy_count, 60);
   EXPECT_EQ(packet.sell_count, 40);
 
-  ASSERT_EQ(packet.matches.size(), 1);
+  ASSERT_EQ(packet.match_count, 1);
   EXPECT_DOUBLE_EQ(packet.matches[0].price.to_double(), 18500.50);
   EXPECT_EQ(packet.matches[0].qty.value(), 5);
 }
@@ -167,7 +167,7 @@ TEST(Parser, ParseI024_MultipleTrades) {
   EXPECT_EQ(result->sell_count, 40);
 
   // 驗證 Matches
-  ASSERT_EQ(result->matches.size(), 3);
+  ASSERT_EQ(result->match_count, 3);
 
   EXPECT_DOUBLE_EQ(result->matches[0].price.to_double(), 18500.50);
   EXPECT_EQ(result->matches[0].qty.value(), 5);
