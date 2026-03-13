@@ -1,5 +1,5 @@
-#ifndef TX_TRADING_ENGINE_BENCH_LATENCY_RECORDER_HPP
-#define TX_TRADING_ENGINE_BENCH_LATENCY_RECORDER_HPP
+#ifndef ONYX_BENCH_LATENCY_RECORDER_HPP
+#define ONYX_BENCH_LATENCY_RECORDER_HPP
 
 #include <cstdint>
 #include <vector>
@@ -86,4 +86,4 @@ class LatencyRecorder {
 
 }  // namespace onyx::bench
 
-#endif  // TX_TRADING_ENGINE_BENCH_LATENCY_RECORDER_HPP
+#endif

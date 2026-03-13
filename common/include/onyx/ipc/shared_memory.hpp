@@ -1,5 +1,5 @@
-#ifndef TX_TRADING_ENGINE_IPC_SHARED_MEMORY_HPP
-#define TX_TRADING_ENGINE_IPC_SHARED_MEMORY_HPP
+#ifndef ONYX_IPC_SHARED_MEMORY_HPP
+#define ONYX_IPC_SHARED_MEMORY_HPP
 
 #include <sys/mman.h>
 #include <sys/types.h>

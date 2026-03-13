@@ -112,7 +112,8 @@ target_compile_options(
     project-compiler-options
     INTERFACE
         -fdiagnostics-color=always # 彩色診斷輸出（提升可讀性）
-        -fno-exceptions # 禁止使用異常（低延遲系統常見設定）
+        # 為了兼容第三方庫故開啟異常
+        # -fno-exceptions # 禁止使用異常
         -fno-rtti # 禁止 RTTI（減少二進制大小與虛表開銷）
         -rdynamic # 鏈接器將所有的符號（即函數名、變數名）都放進動態符號表.dynsym 段中，用於 backtrace 可以看到完整名稱
         # === Debug 配置 ===

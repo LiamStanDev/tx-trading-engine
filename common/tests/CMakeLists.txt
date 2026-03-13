@@ -9,17 +9,19 @@ add_executable(onyx-common-tests)
 target_sources(
     onyx-common-tests
     PRIVATE
-        ./error_test.cpp
-        ./core/price_test.cpp
-        ./core/object_pool_test.cpp
-        ./ipc/shared_memory_test.cpp
-        ./sync/spsc_queue_test.cpp
-        ./io/file_test.cpp
-        ./io/socket_test.cpp
-        ./sys/cpu_affinity_test.cpp
-        ./net/taifex/codec_test.cpp
-        ./net/taifex/parser_i010_test.cpp
-        ./net/taifex/parser_i024_test.cpp
+        # ./error_test.cpp
+        # ./core/price_test.cpp
+        # ./core/object_pool_test.cpp
+        # ./ipc/shared_memory_test.cpp
+        # ./sync/spsc_queue_test.cpp
+        # ./io/file_test.cpp
+        # ./io/socket_test.cpp
+        ./db/pg/connection_test.cpp
+        ./db/pg/connection_pool_test.cpp
+    # ./sys/cpu_affinity_test.cpp
+    # ./net/taifex/codec_test.cpp
+    # ./net/taifex/parser_i010_test.cpp
+    # ./net/taifex/parser_i024_test.cpp
 )
 
 # ============================

@@ -10,6 +10,12 @@ find_package(fmt CONFIG REQUIRED)
 message(STATUS "Found fmt: ${fmt_VERSION}")
 
 # ==============================================================================
+# libpq - PostgreSQL Client Libs
+# ==============================================================================
+find_package(PostgreSQL CONFIG REQUIRED)
+message(STATUS "Found libpq: ${PostgreSQL_VERSION}")
+
+# ==============================================================================
 # Google Test - 單元測試框架
 # ==============================================================================
 if(BUILD_TESTS)

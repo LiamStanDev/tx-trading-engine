@@ -19,6 +19,8 @@ target_sources(
         ./src/io/udp_socket.cpp
         ./src/io/file.cpp
         ./src/io/mapped_file.cpp
+        ./src/db/pg/connection.cpp
+        ./src/db/pg/connection_pool.cpp
         ./src/ipc/shared_memory.cpp
         ./src/sys/cpu_affinity.cpp
         ./src/net/taifex/codec.cpp
@@ -42,8 +44,10 @@ target_link_libraries(
     onyx-common
     PRIVATE
         project::compiler-options # 避免依賴也用相同方式編譯
+        gssapi_krb5 # PostgreSQL GSSAPI 支援所需
     PUBLIC
         fmt::fmt # 因為 hpp 有暴露，故依賴該此庫的都要依賴
+        libpq::libpq
 )
 
 # ============================

@@ -1,5 +1,5 @@
-#ifndef TX_TRADING_ENGINE_UTIL_HPP
-#define TX_TRADING_ENGINE_UTIL_HPP
+#ifndef ONYX_UTIL_HPP
+#define ONYX_UTIL_HPP
 
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
