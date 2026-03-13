@@ -16,11 +16,13 @@ namespace onyx {
 
 /// @brief 錯誤發生上下文資訊
 struct alignas(64) ErrorContext {
-  void* stackframe[10];           // 保存調用棧位置
-  std::error_code ec;             ///< 發生時原始錯誤碼
-  const char* message;            ///< 上下文說明 (靜態字串)
-  std::source_location location;  ///< 發生時錯誤位置
-  uint8_t frame_count;            // 實際使用保存多少個調用棧
+  static inline constexpr size_t MAX_FRAME_COUNT = 6;
+
+  void* stackframe[MAX_FRAME_COUNT];  // 保存調用棧位置
+  std::error_code ec;                 ///< 發生時原始錯誤碼
+  const char* message;                ///< 上下文說明
+  std::source_location location;      ///< 發生時錯誤位置
+  uint8_t frame_count;                // 實際使用保存多少個調用棧
 
   friend bool operator==(const ErrorContext& lhs, const std::error_code& rhs) noexcept {
     return lhs.ec == rhs;
@@ -42,7 +44,7 @@ struct ErrorHandle {
 
   const ErrorContext& context() const noexcept;
   std::error_code ec() const noexcept;
-  const char* message() const noexcept;
+  std::string_view message() const noexcept;
 
   friend bool operator==(const ErrorHandle& lhs, const std::error_code& rhs) noexcept {
     return lhs.context().ec == rhs;
@@ -61,9 +63,14 @@ static_assert(sizeof(ErrorHandle) <= 4, "Size of ErrorHandle should less then 4 
 ///
 /// @note 每個執行緒獨立管理其最後一次錯誤路徑。
 class ErrorRegistry {
+ public:
+  // NOTE: 這邊使用 u32 不是 size_t 是因為我不希望 ErrorHandle 太大
+  static inline constexpr uint32_t SIZE = 16;         ///< 錯誤 RingBuffer 大小
+  static inline constexpr size_t MSG_MAX_LEN = 1023;  //< 錯誤訊息長度 (保留 1 byte 給 '\0')
+
  private:
-  static constexpr uint32_t SIZE = 16;                                  ///< 錯誤 RingBuffer 大小
-  static inline thread_local std::array<ErrorContext, SIZE> buffer_{};  ///< Error RingBuffer
+  static inline thread_local std::array<ErrorContext, SIZE> ctx_buffer_{};  ///< Error RingBuffer
+  static inline thread_local std::array<std::array<char, MSG_MAX_LEN + 1>, SIZE> msg_buffer_{};
   static inline thread_local uint32_t head_{0};  ///< 獲取當前執行緒最新錯誤指標
 
  public:
@@ -83,7 +90,7 @@ class ErrorRegistry {
   /// - 狀態機異常: 進入了 `unreachable` 的代碼分支
   ///
   /// @note 此函數會填寫 stackframe 並設定 frame_count。
-  static ErrorHandle capture_origin(std::error_code ec, const char* msg,
+  static ErrorHandle capture_origin(std::error_code ec, std::string_view msg,
                                     std::source_location loc) noexcept;
 
   /// @brief 輕量級錯誤捕捉 - 不捕捉堆疊
@@ -99,7 +106,7 @@ class ErrorRegistry {
   /// - 業務邏輯拒絕 (Validation): 參數檢查失敗、無效的訂單價格等
   ///
   /// @note 此函數會將 frame_count 設為 0。
-  static ErrorHandle capture_origin_thin(std::error_code ec, const char* msg,
+  static ErrorHandle capture_origin_thin(std::error_code ec, std::string_view msg,
                                          std::source_location loc) noexcept;
 
   /// @brief 獲取錯誤詳情
@@ -109,7 +116,7 @@ class ErrorRegistry {
       return EXPIRED_CONTEXT;
     }
 
-    return buffer_[h.id % SIZE];
+    return ctx_buffer_[h.id % SIZE];
   }
 
  private:
@@ -165,7 +172,7 @@ std::error_code make_error_code(int ev) noexcept;
 /// - 僅在系統異常或不可恢復的錯誤時使用
 /// - 此函式應僅在錯誤源頭呼叫
 [[nodiscard]] inline auto fail(
-    std::error_code ec, const char* msg = "",
+    std::error_code ec, std::string_view msg = "",
     std::source_location loc = std::source_location::current()) noexcept {
   ErrorHandle h = ErrorRegistry::capture_origin(ec, msg, loc);
   return std::unexpected(h);
@@ -189,7 +196,7 @@ std::error_code make_error_code(int ev) noexcept;
 /// - 僅在系統異常或不可恢復的錯誤時使用
 /// - 此函式應僅在錯誤源頭呼叫
 [[nodiscard]] inline auto fail(
-    int ev, const char* msg = "",
+    int ev, std::string_view msg = "",
     std::source_location loc = std::source_location::current()) noexcept {
   std::error_code ec = onyx::make_error_code(ev);
   ErrorHandle h = ErrorRegistry::capture_origin(ec, msg, loc);
@@ -214,7 +221,7 @@ std::error_code make_error_code(int ev) noexcept;
 /// - 僅在系統異常或不可恢復的錯誤時使用
 /// - 此函式應僅在錯誤源頭呼叫
 [[nodiscard]] inline auto fail(
-    std::errc ev, const char* msg = "",
+    std::errc ev, std::string_view msg = "",
     std::source_location loc = std::source_location::current()) noexcept {
   std::error_code ec = std::make_error_code(ev);
   ErrorHandle h = ErrorRegistry::capture_origin(ec, msg, loc);
@@ -235,7 +242,7 @@ std::error_code make_error_code(int ev) noexcept;
 /// @param loc 自動捕捉呼叫處的原始碼位置
 /// @return 一個封裝了錯誤碼的 std::unexpected
 [[nodiscard]] inline auto bail(
-    std::error_code ec, const char* msg = "",
+    std::error_code ec, std::string_view msg = "",
     std::source_location loc = std::source_location::current()) noexcept {
   ErrorHandle h = ErrorRegistry::capture_origin_thin(ec, msg, loc);
   return std::unexpected(h);
@@ -251,7 +258,7 @@ std::error_code make_error_code(int ev) noexcept;
 /// @param loc 自動捕捉呼叫處的原始碼位置
 /// @return 一個封裝了錯誤碼的 std::unexpected
 [[nodiscard]] inline auto bail(
-    int ev, const char* msg = "",
+    int ev, std::string_view msg = "",
     std::source_location loc = std::source_location::current()) noexcept {
   std::error_code ec = onyx::make_error_code(ev);
   ErrorHandle h = ErrorRegistry::capture_origin_thin(ec, msg, loc);
@@ -268,7 +275,7 @@ std::error_code make_error_code(int ev) noexcept;
 /// @param loc 自動捕捉呼叫處的原始碼位置
 /// @return 一個封裝了錯誤碼的 std::unexpected
 [[nodiscard]] inline auto bail(
-    std::errc ev, const char* msg = "",
+    std::errc ev, std::string_view msg = "",
     std::source_location loc = std::source_location::current()) noexcept {
   std::error_code ec = std::make_error_code(ev);
   ErrorHandle h = ErrorRegistry::capture_origin_thin(ec, msg, loc);
@@ -367,7 +374,7 @@ constexpr ErrorStrategy classify_errno(int err) noexcept {
 /// @param loc 捕捉位置
 /// @return 總是返回 std::unexpected (代表失敗)
 [[nodiscard]] inline auto wrap_errno(
-    int ev, const char* msg = "",
+    int ev, std::string_view msg = "",
     std::source_location loc = std::source_location::current()) noexcept {
   // 自動區分
   if (classify_errno(ev) == ErrorStrategy::Bail) {
@@ -447,13 +454,14 @@ struct fmt::formatter<onyx::ErrorContext> {
   // 格式化邏輯
   template <typename FormatContext>
   auto format(const onyx::ErrorContext& ctx, FormatContext& fctx) const {
+    const char* msg_to_print = (ctx.message && ctx.message[0] != '\0') ? ctx.message : "None";
     // 基本資訊打印
     auto out = fmt::format_to(fctx.out(),
                               "\n[Error Diagnosis]\n"
                               "Message: {}\n"
                               "Code:    {} ({})\n"
                               "Source:  {}:{}\n",
-                              ctx.message ? ctx.message : "None", ctx.ec.message(), ctx.ec.value(),
+                              msg_to_print, ctx.ec.message(), ctx.ec.value(),
                               ctx.location.file_name(), ctx.location.line());
 
     // Stack Trace 處理

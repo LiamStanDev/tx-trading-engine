@@ -18,7 +18,7 @@ onyx::Result<int> trigger_wrap(int ev) { return onyx::wrap_errno(ev, "Wrap Trigg
 
 class ErrorSystemTest : public ::testing::Test {};
 
-// 1. Test Classification Logic (White-box testing of policy)
+// 1. Test Classification Logic
 TEST_F(ErrorSystemTest, ClassifyErrnoPolicy) {
   using onyx::ErrorStrategy;
 
@@ -51,7 +51,7 @@ TEST_F(ErrorSystemTest, ClassifyErrnoPolicy) {
   EXPECT_EQ(onyx::classify_errno(9999), ErrorStrategy::Fail);  // Unknown
 }
 
-// 2. Test Fail Strategy (Heavy)
+// 2. Test Fail Strategy
 TEST_F(ErrorSystemTest, FailCapturesStackTrace) {
   auto res = trigger_fail(EINVAL);
   ASSERT_FALSE(res.has_value());
@@ -63,7 +63,7 @@ TEST_F(ErrorSystemTest, FailCapturesStackTrace) {
   EXPECT_STREQ(ctx.message, "Fail Triggered");
 }
 
-// 3. Test Bail Strategy (Light)
+// 3. Test Bail Strategy
 TEST_F(ErrorSystemTest, BailSkipsStackTrace) {
   auto res = trigger_bail(EAGAIN);
   ASSERT_FALSE(res.has_value());
@@ -196,7 +196,7 @@ TEST_F(ErrorSystemTest, RegistryRingBufferLifecycle) {
 
   // 2. 驗證過期防禦機制 (Expiration Protection)
   // 假設 SIZE = 16，我們產生 16 個新錯誤，把 head_ 往前推，覆蓋掉最舊的槽位
-  for (int i = 0; i < 16; ++i) {
+  for (int i = 0; i < onyx::ErrorRegistry::SIZE; ++i) {
     (void)onyx::bail(ENOENT, "Spam Error");
   }
 
@@ -204,4 +204,72 @@ TEST_F(ErrorSystemTest, RegistryRingBufferLifecycle) {
   const auto& expired_ctx = res1.error().context();
   EXPECT_EQ(expired_ctx.ec, std::make_error_code(std::errc::state_not_recoverable));
   EXPECT_STREQ(expired_ctx.message, "<EXPIRED ERROR HANDLE>");
+}
+
+// 9. Test Message Truncation (Buffer Overflow Prevention)
+TEST_F(ErrorSystemTest, MessageTruncation) {
+  // 建立一個長度為大於預設的 MSG_MAX_LEN的超長字串
+  std::string huge_msg(onyx::ErrorRegistry::MSG_MAX_LEN + 10, 'A');
+
+  auto res = onyx::bail(EINVAL, huge_msg);
+
+  const auto& ctx = res.error().context();
+  std::string_view saved_msg = res.error().message();
+
+  // 驗證字串長度被精確截斷在 MSG_MAX_LEN
+  EXPECT_EQ(saved_msg.length(), onyx::ErrorRegistry::MSG_MAX_LEN);
+
+  // 驗證截斷後的內容都是 'A'，且確實以 '\0' 結尾
+  // (如果沒有正確 \0 結尾，string_view 或 strlen 的長度會超過)
+  EXPECT_EQ(saved_msg, std::string(onyx::ErrorRegistry::MSG_MAX_LEN, 'A'));
+  EXPECT_EQ(ctx.message[onyx::ErrorRegistry::MSG_MAX_LEN], '\0');
+  EXPECT_EQ(std::strlen(ctx.message), onyx::ErrorRegistry::MSG_MAX_LEN);
+}
+
+// 10. Test Empty Message Safety (Null Pointer Dereference Prevention)
+TEST_F(ErrorSystemTest, EmptyMessageHandling) {
+  // Case A: 傳入明確的空字串
+  auto res1 = onyx::bail(EAGAIN, "");
+  EXPECT_EQ(res1.error().message(), "");
+  EXPECT_STREQ(res1.error().context().message, "");  // C-string 比較
+
+  // Case B: 傳入預設建構的 string_view
+  auto res2 = onyx::fail(EBADF, std::string_view{});
+  EXPECT_EQ(res2.error().message(), "");
+  EXPECT_STREQ(res2.error().context().message, "");
+}
+
+// 11. Test RingBuffer Stale State Overwrite
+TEST_F(ErrorSystemTest, StaleStateOverwrite) {
+  // 第一步：在目前的 Slot 寫入一個明顯的長字串
+  auto res_initial = onyx::bail(EAGAIN, "SUPER_LONG_STALE_MESSAGE_THAT_SHOULD_BE_OVERWRITTEN");
+  uint32_t initial_id = res_initial.error().id;
+
+  // 第二步：產生 SIZE - 1 個錯誤，讓 RingBuffer 的 head_ 剛好繞回同一個 Slot
+  for (int i = 0; i < onyx::ErrorRegistry::SIZE - 1; ++i) {
+    (void)onyx::bail(EINTR, "Dummy");
+  }
+
+  // 第三步：在同一個 Slot 觸發一個帶有「極短字串」的錯誤
+  auto res_overwrite_short = onyx::bail(EINVAL, "Short");
+
+  // 確保確實繞回同一個 Slot (ID 差 16)
+  EXPECT_EQ(res_overwrite_short.error().id % 16, initial_id % 16);
+
+  // 驗證 1: 新字串必須是 "Short"
+  EXPECT_EQ(res_overwrite_short.error().message(), "Short");
+  // 驗證 2: 記憶體中不能殘留舊字串的尾巴 (例如 "Short_LONG_STALE...")
+  EXPECT_STREQ(res_overwrite_short.error().context().message, "Short");
+
+  // 第四步：再繞一圈 (再產生 15 個 dummy)
+  for (int i = 0; i < 15; ++i) {
+    (void)onyx::bail(EINTR, "Dummy");
+  }
+
+  // 第五步：這次用「空字串」覆蓋
+  auto res_overwrite_empty = onyx::fail(EFAULT, "");
+
+  // 驗證空字串確實覆蓋了之前的內容，而不是印出舊字串
+  EXPECT_EQ(res_overwrite_empty.error().message(), "");
+  EXPECT_STREQ(res_overwrite_empty.error().context().message, "");
 }
