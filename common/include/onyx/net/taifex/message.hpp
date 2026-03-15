@@ -5,20 +5,20 @@
 
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <cstring>
-#include <functional>
-#include <string_view>
 #include <unordered_map>
 
 #include "onyx/core/type.hpp"
+#include "onyx/net/taifex/constant.hpp"
 
 namespace onyx::net::taifex {
 
 using namespace onyx::core;
 
-using ProdIdKey = std::array<char, 10>;
+using ProdIdKey = std::array<char, PROD_ID_S_LEN>;
 
-/// @brief I010 商品基本資料（應用層）
+/// @brief 商品基本資料
 struct ProductSpec {
   ProdIdKey prod_id;        ///< 商品代號（10 bytes，右側填空白）
   uint8_t flow_group;       ///< 流程群組（1-14）
@@ -69,19 +69,50 @@ struct TradeMatch {
   Quantity qty;  ///< 成交量
 };
 
-/// @brief I024 成交信息
+/// @brief 成交信息
 struct TradePacket {
   static inline constexpr size_t MAX_MATCH_SIZE = 71;
 
-  std::array<char, 20> prod_id;                    ///< 商品代碼
+  std::array<char, PROD_ID_LEN> prod_id;           ///< 商品代碼
   uint64_t prod_msg_seq;                           ///< 商品訊商序列號
   std::chrono::nanoseconds match_time;             ///< 成交時間
-  bool is_calculated;                              ///< 是否為試撮
+  bool is_simulated;                               ///< 是否為試撮
   Quantity total_qty;                              ///< 累積交易量
   uint64_t buy_count;                              ///< 累積買進筆數
   uint64_t sell_count;                             ///< 累積賣出筆數
   uint8_t match_count;                             ///< 成交價量筆數
   std::array<TradeMatch, MAX_MATCH_SIZE> matches;  ///< 成交價量
+};
+
+/// @brief 委託簿快照
+struct BookSnapshot {
+  std::array<char, PROD_ID_LEN> prod_id;
+  uint64_t prod_msg_seq;
+  bool is_simulated;            // true=試撮, false=開盤
+  PriceLevel bids[BOOK_DEPTH];  // 買檔 1-5
+  PriceLevel asks[BOOK_DEPTH];  // 賣檔 1-5
+  PriceLevel derived_bid;       // 衍生買一檔（MD-ENTRY-TYPE='E'）
+  PriceLevel derived_ask;       // 衍生賣一檔（MD-ENTRY-TYPE='F'）
+};
+
+/// @brief 委託簿更新 (單筆)
+struct BookUpdateEntry {
+  UpdateAction action;
+  EntryType type;
+  Price price;
+  Quantity size;
+  uint8_t level;  // 0-4 (0-based)
+};
+
+/// @brief 委託簿更新 (整體)
+struct BookUpdate {
+  static inline constexpr size_t MAX_ENTRIES =
+      12;  // WARN: 有待確認 (目前是覺得買賣各五檔 + 衍生一檔 x 2)
+
+  std::array<char, PROD_ID_LEN> prod_id;
+  uint64_t prod_msg_seq;
+  uint8_t entry_count;                               // 實際筆數
+  std::array<BookUpdateEntry, MAX_ENTRIES> entries;  // 更新項目
 };
 
 }  // namespace onyx::net::taifex

@@ -350,15 +350,15 @@ constexpr ErrorStrategy classify_errno(int err) noexcept {
     // -----------------------------------------------------------------
     // Group 6: 必須 FAIL 的嚴重錯誤 (Explicit Fail List)
     // -----------------------------------------------------------------
-    case EBADF:       // 無效的文件描述符 (邏輯 Bug: Double close / Use after close)
-    case EFAULT:      // 非法內存地址 (邏輯 Bug: 指標亂指)
-    case EINVAL:      // 無效參數 (邏輯 Bug: 傳錯參數)
+    case EBADF:       // 無效的文件描述符 → 程式邏輯錯誤 (Double close / Use after close)
+    case EFAULT:      // 非法內存地址 → 程式邏輯錯誤 (指標亂指)
+    case EINVAL:      // 無效參數 → 程式邏輯錯誤 (傳錯參數)
     case EMFILE:      // 進程 FD 耗盡(資源洩漏)
     case ENFILE:      // 系統 FD 耗盡 (嚴重環境問題)
     case ENOMEM:      // 內存不足 (OOM)
     case EACCES:      // 權限不足 (配置錯誤)
     case EADDRINUSE:  // 地址被佔用 (啟動失敗)
-    case ENOTSOCK:    // 對非 Socket fd 操作 socket api (邏輯 Bug)
+    case ENOTSOCK:    // 對非 Socket fd 操作 socket api
 
     default:
       // 防禦性編程：任何沒看過的錯誤，都視為異常，保留現場

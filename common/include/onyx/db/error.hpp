@@ -2,11 +2,12 @@
 #ifndef ONYX_DB_PG_ERROR_HPP
 #define ONYX_DB_PG_ERROR_HPP
 
+#include <cstdint>
 #include <system_error>
 
 namespace onyx::db {
 
-enum class DbErrc {
+enum class DbErrc : uint8_t {
   ConnectionFail = 1,  ///< 資料庫連線失敗
   QueryFail,           ///< 執行 Query 失敗
   // TypeParseErr,        ///< 類型解析錯誤

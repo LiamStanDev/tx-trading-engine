@@ -7,6 +7,7 @@
 #include <span>
 
 #include "onyx/core/type.hpp"
+#include "onyx/net/taifex/constant.hpp"
 
 namespace onyx::net::taifex {
 
@@ -24,16 +25,26 @@ void encode_bcd(uint8_t* dst, size_t dst_len, uint64_t val) noexcept;
 /// @note PACK BCD 格式會用一個 byte 存放兩個十進值整數，前四位為第一個後四位為第二個
 uint64_t unpack_bcd(std::span<const uint8_t> bcd_bytes) noexcept;
 
+/// @brief 將 PACK BCD 格式轉回數值
+///
+/// @note PACK BCD 格式會用一個 byte 存放兩個十進值整數，前四位為第一個後四位為第二個
+uint8_t unpack_bcd(uint8_t bcd_byte) noexcept;
+
 /// @brief 將 PACK BCD 轉換為 Price (需要知道小數位數)
 ///
 /// @param bcd_bytes 待解析位元陣列
 /// @param sign 價格正負號，價格正負號 '0' 正號, '-' 負號(複式商品專用)
 /// @param decimal_places 小數點位數
-Price unpack_bcd_price(std::span<const uint8_t> bcd_bytes, int decimal_places,
-                       char sign = '0') noexcept;
+Price unpack_bcd_price(std::span<const uint8_t, BCD_PRICE_LEN> bcd_bytes, uint8_t decimal_places,
+                       bool is_negative = false) noexcept;
+
+/// @brief 將 PACK BCD 轉換為 Quantity
+///
+/// @param bcd_bytes 待解析位元陣列
+Quantity unpack_bcd_qty(std::span<const uint8_t> bcd_bytes) noexcept;
 
 /// @brief 將 PACK BCD 轉換為 chrono 納秒時間戳
-std::chrono::nanoseconds unpack_bcd_time(std::span<const uint8_t> bcd_bytes) noexcept;
+std::chrono::nanoseconds unpack_bcd_time(std::span<const uint8_t, BCD_TIME_LEN> bcd_bytes) noexcept;
 
 }  // namespace onyx::net::taifex
 

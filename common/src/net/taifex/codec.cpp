@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "onyx/core/type.hpp"
+#include "onyx/net/taifex/constant.hpp"
 
 namespace onyx::net::taifex {
 
@@ -30,23 +31,30 @@ uint64_t unpack_bcd(std::span<const uint8_t> bcd_bytes) noexcept {
   return res;
 }
 
-Price unpack_bcd_price(std::span<const uint8_t> bcd_bytes, int decimal_places, char sign) noexcept {
+uint8_t unpack_bcd(uint8_t bcd_byte) noexcept {
+  uint8_t high = (bcd_byte >> 4) & 0x0F;
+  uint8_t low = bcd_byte & 0x0F;
+  return static_cast<uint8_t>(high * 10 + low);
+}
+
+Price unpack_bcd_price(std::span<const uint8_t, BCD_PRICE_LEN> bcd_bytes, uint8_t decimal_places,
+                       bool is_negative) noexcept {
   int64_t raw_value;
-  if (sign == '-') [[unlikely]] {
+  if (is_negative) [[unlikely]] {
     raw_value = -static_cast<int64_t>(unpack_bcd(bcd_bytes));
   } else {
     raw_value = static_cast<int64_t>(unpack_bcd(bcd_bytes));
   }
 
-  assert(decimal_places <= 4 && "decimal_places exceeds Price precision");
-
-  static constexpr int64_t scale_table[] = {10000, 1000, 100, 10, 1};
-  int64_t scale_factor = scale_table[decimal_places];
-
-  return Price::from_raw(static_cast<int64_t>(raw_value) * scale_factor);
+  return Price::from(raw_value, decimal_places);
 }
 
-std::chrono::nanoseconds unpack_bcd_time(std::span<const uint8_t> bcd_bytes) noexcept {
+Quantity unpack_bcd_qty(std::span<const uint8_t> bcd_bytes) noexcept {
+  return Quantity::from(static_cast<int64_t>(unpack_bcd(bcd_bytes)));
+}
+
+std::chrono::nanoseconds unpack_bcd_time(
+    std::span<const uint8_t, BCD_TIME_LEN> bcd_bytes) noexcept {
   uint64_t val = unpack_bcd(bcd_bytes);
 
   // HH:mm:ss:mmm:uuu

@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "onyx/core/type.hpp"
+#include "onyx/net/taifex/constant.hpp"
 
 namespace {
 
@@ -13,13 +14,13 @@ using namespace onyx::net::taifex;
 
 TEST(Codec, UnpackBCDPrice_TXF) {
   // 台指期價格：18500.50 (decimal_places = 2)
-  // PACK BCD: 0x01 0x85 0x00 0x50 → 1850050
-  uint8_t bcd[] = {0x01, 0x85, 0x00, 0x50};
+  // PACK BCD: 0x00 0x01 0x85 0x00 0x50 → 1850050
+  uint8_t bcd[BCD_PRICE_LEN] = {0x00, 0x01, 0x85, 0x00, 0x50};
 
   Price price = unpack_bcd_price(bcd, 2);
 
   // 預期：18500.50
-  EXPECT_DOUBLE_EQ(price.to_double(), 18500.50);
+  EXPECT_DOUBLE_EQ(price.value(), 18500.50);
 
   // 內部表示：18500.50 * 10000 = 185005000
   EXPECT_EQ(price.raw(), 185005000);

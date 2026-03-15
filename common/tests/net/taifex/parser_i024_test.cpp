@@ -15,14 +15,14 @@ namespace {
 using namespace onyx::net::taifex;
 
 struct ExtraMatch {
-  char sign;
+  Sign sign;
   uint64_t price;
   uint64_t qty;
 };
 
 std::vector<std::byte> build_i024_buffer(const char* prod_id, uint64_t prod_msg_seq,
                                          uint64_t match_time, uint64_t first_match_price,
-                                         uint64_t first_match_qty, char calculated_flag,
+                                         uint64_t first_match_qty, CalculatedFlag calculated_flag,
                                          const std::vector<ExtraMatch>& extra_matches,
                                          uint64_t total_qty, uint64_t buy_count,
                                          uint64_t sell_count) {
@@ -53,7 +53,7 @@ std::vector<std::byte> build_i024_buffer(const char* prod_id, uint64_t prod_msg_
   encode_bcd(fixed->prod_msg_seq, 5, prod_msg_seq);
   fixed->calculated_flag = calculated_flag;
   encode_bcd(fixed->match_time, 6, match_time);
-  fixed->sign = '+';
+  fixed->sign = Sign::Positive;
   encode_bcd(fixed->first_match_price, 5, first_match_price);
   encode_bcd(fixed->first_match_qty, 4, first_match_qty);
 
@@ -109,11 +109,11 @@ TEST(Parser, ParseI024_SingleTrade) {
                                   90000123456ULL,  // match_time: 09:00:00.123456
                                   1850050,  // first_match_price: 18500.50（decimal_places = 2）
                                   5,        // first_match_qty
-                                  '0',      // calculated_flag: 成交揭示
-                                  {},       // extra_matches
-                                  100,      // total_qty
-                                  60,       // buy_count
-                                  40        // sell_count
+                                  CalculatedFlag::Real,  // calculated_flag: 成交揭示
+                                  {},                    // extra_matches
+                                  100,                   // total_qty
+                                  60,                    // buy_count
+                                  40                     // sell_count
   );
 
   auto result = parse_i024(buffer, spec_table);
@@ -129,13 +129,13 @@ TEST(Parser, ParseI024_SingleTrade) {
                                            std::chrono::milliseconds(123) +
                                            std::chrono::microseconds(456);
   EXPECT_EQ(packet.match_time, expected_time);
-  EXPECT_FALSE(packet.is_calculated);
+  EXPECT_FALSE(packet.is_simulated);
   EXPECT_EQ(packet.total_qty.value(), 100);
   EXPECT_EQ(packet.buy_count, 60);
   EXPECT_EQ(packet.sell_count, 40);
 
   ASSERT_EQ(packet.match_count, 1);
-  EXPECT_DOUBLE_EQ(packet.matches[0].price.to_double(), 18500.50);
+  EXPECT_DOUBLE_EQ(packet.matches[0].price.value(), 18500.50);
   EXPECT_EQ(packet.matches[0].qty.value(), 5);
 }
 
@@ -153,9 +153,10 @@ TEST(Parser, ParseI024_MultipleTrades) {
   spec_table.update(spec);
 
   // 構造一個有 2 筆額外成交的 buffer
-  std::vector<ExtraMatch> extras = {{'-', 1850040, 2}, {'+', 1850060, 3}};
+  std::vector<ExtraMatch> extras = {{Sign::Negative, 1850040, 2}, {Sign::Positive, 1850060, 3}};
 
-  auto buffer = build_i024_buffer(prod_id, 1, 90000000000ULL, 1850050, 5, '0', extras, 100, 60, 40);
+  auto buffer = build_i024_buffer(prod_id, 1, 90000000000ULL, 1850050, 5, CalculatedFlag::Real,
+                                  extras, 100, 60, 40);
 
   auto result = parse_i024(buffer, spec_table);
 
@@ -169,13 +170,13 @@ TEST(Parser, ParseI024_MultipleTrades) {
   // 驗證 Matches
   ASSERT_EQ(result->match_count, 3);
 
-  EXPECT_DOUBLE_EQ(result->matches[0].price.to_double(), 18500.50);
+  EXPECT_DOUBLE_EQ(result->matches[0].price.value(), 18500.50);
   EXPECT_EQ(result->matches[0].qty.value(), 5);
 
-  EXPECT_DOUBLE_EQ(result->matches[1].price.to_double(), -18500.40);
+  EXPECT_DOUBLE_EQ(result->matches[1].price.value(), -18500.40);
   EXPECT_EQ(result->matches[1].qty.value(), 2);
 
-  EXPECT_DOUBLE_EQ(result->matches[2].price.to_double(), 18500.60);
+  EXPECT_DOUBLE_EQ(result->matches[2].price.value(), 18500.60);
   EXPECT_EQ(result->matches[2].qty.value(), 3);
 }
 
@@ -194,13 +195,13 @@ TEST(Parser, ParseI024_CalculatedFlag) {
   spec_table.update(spec);
 
   auto buffer = build_i024_buffer(prod_id, 1, 90000000000ULL, 1850050, 5,
-                                  '1',  // calculated_flag = '1'
+                                  CalculatedFlag::Simulated,  // calculated_flag = '1'
                                   {}, 100, 60, 40);
 
   auto result = parse_i024(buffer, spec_table);
 
   ASSERT_TRUE(result);
-  EXPECT_TRUE(result->is_calculated);
+  EXPECT_TRUE(result->is_simulated);
 }
 
 // ============================================================================
@@ -224,10 +225,12 @@ TEST(Parser, ParseI024_BufferTooSmall) {
 TEST(Parser, ParseI024_MismatchedLength) {
   ProductSpecTable spec_table;
 
-  std::vector<ExtraMatch> extras = {{'+', 1850040, 2}, {'+', 1850060, 3}, {'+', 1850070, 4}};
+  std::vector<ExtraMatch> extras = {
+      {Sign::Positive, 1850040, 2}, {Sign::Positive, 1850060, 3}, {Sign::Positive, 1850070, 4}};
 
   // 構造一個有 3 筆額外成交的 buffer
-  auto buffer = build_i024_buffer("TXF", 1, 90000000000ULL, 1850050, 5, '0', extras, 100, 60, 40);
+  auto buffer = build_i024_buffer("TXF", 1, 90000000000ULL, 1850050, 5, CalculatedFlag::Real,
+                                  extras, 100, 60, 40);
 
   // 刻意截斷 buffer，不夠放 3 筆 MatchEntry + Footer
   buffer.resize(sizeof(I024FixedPart) + 2 * sizeof(I024MatchEntry) + sizeof(I024Footer) - 1);
@@ -243,16 +246,16 @@ TEST(Parser, ParseI024_MismatchedLength) {
 TEST(Parser, ParseI024_UnknownProduct) {
   ProductSpecTable spec_table;
 
-  auto buffer = build_i024_buffer("UNKNOWN",       // prod_id
-                                  1,               // prod_msg_seq
-                                  90000000000ULL,  // match_time: 09:00:00.000000
-                                  1850050,         // first_match_price
-                                  5,               // first_match_qty
-                                  '0',             // calculated_flag
-                                  {},              // extra_matches
-                                  100,             // total_qty
-                                  60,              // buy_count
-                                  40               // sell_count
+  auto buffer = build_i024_buffer("UNKNOWN",             // prod_id
+                                  1,                     // prod_msg_seq
+                                  90000000000ULL,        // match_time: 09:00:00.000000
+                                  1850050,               // first_match_price
+                                  5,                     // first_match_qty
+                                  CalculatedFlag::Real,  // calculated_flag
+                                  {},                    // extra_matches
+                                  100,                   // total_qty
+                                  60,                    // buy_count
+                                  40                     // sell_count
   );
 
   auto result = parse_i024(buffer, spec_table);

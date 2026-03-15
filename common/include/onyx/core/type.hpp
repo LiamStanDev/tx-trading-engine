@@ -1,125 +1,102 @@
 #ifndef ONYX_CORE_TYPE_HPP
 #define ONYX_CORE_TYPE_HPP
 
+#include <fmt/core.h>
+
 #include <cassert>
 #include <compare>
 #include <cstdint>
 #include <functional>
 #include <limits>
-#include <optional>
 #include <string>
 
 namespace onyx::core {
 
-/// @brief 強類型價格型別，使用定點數表示
-///
-/// 設計目標：
-/// 1. 避免 double 的精度遺失問題。
-/// 2. 支援台灣市場所有商品的最小跳動 (0.01)。
-/// 3. 提供 4 位小數精度 (SCALAR = 10000)，以支援均價計算與未來擴充。
-class Price {
- private:
-  int64_t scaled_value_;  ///< 儲存值： 1 代表 0.0001 點 (依據 SCALAR)
+/**
+ * CRTP (Curiously Recurring Template Pattern)
+ * 為了解決繼承父類型不知道子類型的樣態，所以父類型無法透過 this 指針直接
+ * 調用子類型方法，故才會有 vtable 來輔助。但是 vtable 會有開銷，想在編譯
+ * 期間消除，就只能讓父類型知道子類型的形狀，因為 Template 會為每一個模板
+ * 參數都編譯一次，所以可以將子類類型傳給父類型，父類型就知道子類型狀可以
+ * 直接調用子類方法。
+ */
 
-  explicit constexpr Price(int64_t scaled_value) noexcept : scaled_value_(scaled_value) {}
+/// @brief 基於 CRTP 的強型別定點數基底類別
+///
+/// @tparam Derived 繼承此類別的子類別 (本身作為 Tag 使用)
+/// @tparam Scalar 縮放因子
+template <typename Derived, int64_t Scalar>
+class FixedPoint {
+ protected:
+  int64_t scaled_value_{0};
+
+  constexpr FixedPoint() noexcept = default;
+  explicit FixedPoint(int64_t val) noexcept : scaled_value_(val) {}
 
  public:
   // ----------------------------------------------------------------------------
   // Constants
   // ----------------------------------------------------------------------------
 
-  // 縮放因子：10000 (支援到小數點下 4 位)
-  // 1.0 點 = 10000 units
-  // 0.01 點 = 100 units
-  static constexpr int64_t SCALAR = 10000;
-  static constexpr double SCALAR_D = 10000.0;
-  static constexpr int64_t INVALID_VAL = std::numeric_limits<int64_t>::min();
-
-  // ----------------------------------------------------------------------------
-  // Constructor & Factory Methods
-  // ----------------------------------------------------------------------------
-  constexpr Price() noexcept : scaled_value_(INVALID_VAL) {}
-
-  /// @brief 從浮點數建立
-  static constexpr Price from_double(double points) noexcept {
-    // 加上 0.5 做四捨五入，避免 100.01 變成 100.00999... 而被截斷
-    double val = (points * SCALAR_D) + (points >= 0 ? 0.5 : -0.5);
-    return Price{static_cast<int64_t>(val)};
-  }
-
-  /// @brief 從原始整數建立 (Raw Ticks)
-  ///
-  /// @param raw_value 必須已經是乘過 SCALAR 的值
-  static constexpr Price from_raw(int64_t raw_value) noexcept { return Price{raw_value}; }
+  inline static constexpr int64_t SCALAR = Scalar;
+  inline static constexpr double SCALAR_D = static_cast<double>(Scalar);
 
   // ----------------------------------------------------------------------------
   // Queries
   // ----------------------------------------------------------------------------
-
   [[nodiscard]] constexpr double to_double() const noexcept {
-    return static_cast<double>(scaled_value_) / SCALAR;
+    return static_cast<double>(scaled_value_) / SCALAR_D;
   }
 
-  /// @brief 取得底層整數
   [[nodiscard]] constexpr int64_t raw() const noexcept { return scaled_value_; }
 
   // ----------------------------------------------------------------------------
-  // Arithmetic operations
+  // Arithmetic operations (回傳 Derived 類型: 需要子類實作 from_scaled 方法)
   // ----------------------------------------------------------------------------
-
-  // brief 價格調整
-  [[nodiscard]] constexpr Price operator+(const Price& other) const noexcept {
-    assert(is_valid() && other.is_valid());
+  [[nodiscard]] constexpr Derived operator+(const Derived& other) const noexcept {
     assert((other.scaled_value_ > 0 && scaled_value_ <= INT64_MAX - other.scaled_value_) ||
            (other.scaled_value_ <= 0 && scaled_value_ >= INT64_MIN - other.scaled_value_));
-
-    return Price{scaled_value_ + other.scaled_value_};
+    return Derived(scaled_value_ + other.scaled_value_);
   }
 
-  // @brief 價差運算
-  [[nodiscard]] constexpr Price operator-(const Price& other) const noexcept {
-    assert(is_valid() && other.is_valid());
+  [[nodiscard]] constexpr Derived operator-(const Derived& other) const noexcept {
     assert((other.scaled_value_ < 0 && scaled_value_ <= INT64_MAX + other.scaled_value_) ||
            (other.scaled_value_ >= 0 && scaled_value_ >= INT64_MIN + other.scaled_value_));
-    return Price{scaled_value_ - other.scaled_value_};
+    return Derived(scaled_value_ - other.scaled_value_);
   }
 
-  // @brief 價格放大
-  [[nodiscard]] constexpr Price operator*(int64_t scalar) const noexcept {
-    assert(is_valid());
-    assert(scalar == 0 ||
-           (scaled_value_ >= 0 && scalar > 0 && scaled_value_ <= INT64_MAX / scalar) ||
-           (scaled_value_ >= 0 && scalar < 0 && scaled_value_ >= INT64_MIN / scalar) ||
-           (scaled_value_ < 0 && scalar > 0 && scaled_value_ >= INT64_MIN / scalar) ||
-           (scaled_value_ < 0 && scalar < 0 && scaled_value_ >= INT64_MAX / scalar));
-
-    return Price{scaled_value_ * scalar};
+  [[nodiscard]] constexpr Derived operator*(int64_t multiplier) const noexcept {
+    assert(multiplier == 0 ||
+           (scaled_value_ >= 0 && multiplier > 0 && scaled_value_ <= INT64_MAX / multiplier) ||
+           (scaled_value_ >= 0 && multiplier < 0 && scaled_value_ >= INT64_MIN / multiplier) ||
+           (scaled_value_ < 0 && multiplier > 0 && scaled_value_ >= INT64_MIN / multiplier) ||
+           (scaled_value_ < 0 && multiplier < 0 && scaled_value_ >= INT64_MAX / multiplier));
+    return Derived(scaled_value_ * multiplier);
   }
 
-  // @brief 價格縮小，會截斷 (因為整數除法)
-  [[nodiscard]] constexpr Price operator/(int64_t divisor) const noexcept {
-    assert(is_valid() && divisor != 0);
-    return Price{scaled_value_ / divisor};
+  [[nodiscard]] constexpr Derived operator/(int64_t divisor) const noexcept {
+    assert(divisor != 0);
+    return Derived(scaled_value_ / divisor);
   }
 
-  constexpr Price& operator+=(const Price& rhs) noexcept {
-    scaled_value_ += rhs.scaled_value_;
-    return *this;
+  constexpr Derived& operator+=(const Derived& rhs) noexcept {
+    *this = *this + rhs;  // 重用 operator+ 的 assert 邏輯
+    return static_cast<Derived&>(*this);
   }
-  constexpr Price& operator-=(const Price& rhs) noexcept {
-    scaled_value_ -= rhs.scaled_value_;
-    return *this;
+
+  constexpr Derived& operator-=(const Derived& rhs) noexcept {
+    *this = *this - rhs;  // 重用 operator- 的 assert 邏輯
+    return static_cast<Derived&>(*this);
   }
 
   // ----------------------------------------------------------------------------
-  // Comparison operaitons
+  // Comparison
   // ----------------------------------------------------------------------------
-
-  [[nodiscard]] constexpr bool operator==(const Price& other) const noexcept {
+  [[nodiscard]] constexpr bool operator==(const Derived& other) const noexcept {
     return scaled_value_ == other.scaled_value_;
   }
 
-  [[nodiscard]] constexpr std::strong_ordering operator<=>(const Price& other) const noexcept {
+  [[nodiscard]] constexpr std::strong_ordering operator<=>(const Derived& other) const noexcept {
     return scaled_value_ <=> other.scaled_value_;
   }
 
@@ -127,168 +104,170 @@ class Price {
   // Special values
   // ----------------------------------------------------------------------------
 
-  static constexpr Price zero() noexcept { return Price{0}; }
-  static constexpr Price max() noexcept { return Price{std::numeric_limits<int64_t>::max()}; }
-  static constexpr Price min() noexcept { return Price{std::numeric_limits<int64_t>::min() + 1}; }
-  static constexpr Price invalid() noexcept { return Price{INVALID_VAL}; }
+  static constexpr Derived zero() noexcept { return Derived{}; }
+  static constexpr Derived max() noexcept { return Derived{std::numeric_limits<int64_t>::max()}; }
+  static constexpr Derived min() noexcept { return Derived{std::numeric_limits<int64_t>::min()}; }
 
   // ----------------------------------------------------------------------------
   // Status
   // ----------------------------------------------------------------------------
-
-  [[nodiscard]] constexpr bool is_valid() const noexcept { return scaled_value_ != INVALID_VAL; }
   [[nodiscard]] constexpr bool is_positive() const noexcept { return scaled_value_ > 0; }
   [[nodiscard]] constexpr bool is_negative() const noexcept { return scaled_value_ < 0; }
   [[nodiscard]] constexpr bool is_zero() const noexcept { return scaled_value_ == 0; }
-
-  // ----------------------------------------------------------------------------
-  // Serialization
-  // ----------------------------------------------------------------------------
-
-  std::string to_string() const;
 };
 
-class Quantity {
+/// @brief 強類型價格型別，使用定點數表示
+///
+/// 設計目標：
+/// 1. 避免 double 的精度遺失問題。
+/// 2. 支援台灣市場所有商品的最小跳動 (0.01)。
+/// 3. 提供 4 位小數精度 (SCALAR = 10000)，以支援均價計算與未來擴充。
+class Price : public FixedPoint<Price, 10000> {
  private:
-  int64_t value_;
+  friend class FixedPoint;  ///< CRTP 允許存取其私有成員
 
-  explicit constexpr Quantity(int64_t value) noexcept : value_(value) {
-    assert(value >= 0 && "Quantity cannot be negative");
-  }
+  explicit constexpr Price(int64_t scaled_value) noexcept : FixedPoint(scaled_value) {}
 
  public:
   // ----------------------------------------------------------------------------
-  // Constructors & Factory Methods
+  // Constructor & Factory Methods
   // ----------------------------------------------------------------------------
+  constexpr Price() noexcept = default;
 
-  constexpr Quantity() noexcept : value_(0) {}
+  /// @brief 從浮點數建立
+  static constexpr Price from(double val) noexcept {
+    // 加上 0.5 做四捨五入，避免 100.01 變成 100.00999... 而被截斷
+    int64_t raw = static_cast<int64_t>((val * SCALAR_D) + (val >= 0 ? 0.5 : -0.5));
+    return Price{raw};
+  }
 
-  static constexpr Quantity from_value(int64_t value) noexcept { return Quantity{value}; }
+  /// @brief 從整數值與小數位數建立
+  ///
+  /// @param val 整數值
+  /// @param decimal_places 小數點位數
+  static constexpr Price from(int64_t val, uint8_t decimal_places) noexcept {
+    assert(decimal_places <= 4 && "decimal_places exceeds Price precision");
+
+    static constexpr uint32_t scale_table[] = {1, 10, 100, 1000, 10000};
+
+    int64_t raw = val * (SCALAR / scale_table[decimal_places]);
+    return Price{raw};
+  }
 
   // ----------------------------------------------------------------------------
   // Queries
   // ----------------------------------------------------------------------------
 
-  [[nodiscard]] constexpr int64_t value() const noexcept { return value_; }
-  [[nodiscard]] constexpr bool is_zero() const noexcept { return value_ == 0; }
-  [[nodiscard]] constexpr bool is_positive() const noexcept { return value_ > 0; }
-  [[nodiscard]] constexpr bool is_valid() const noexcept { return value_ >= 0; }
+  /// @brief 取得 Price 的數值
+  ///
+  /// @return 價格數值以符點數表示
+  [[nodiscard]] constexpr double value() const noexcept { return to_double(); }
 
   // ----------------------------------------------------------------------------
-  // Comparison operations
-  // ----------------------------------------------------------------------------
-  [[nodiscard]] constexpr bool operator==(const Quantity& rhs) const noexcept {
-    return value_ == rhs.value_;
-  }
-
-  [[nodiscard]] constexpr std::strong_ordering operator<=>(const Quantity& other) const noexcept {
-    return value_ <=> other.value_;
-  }
-
-  // ----------------------------------------------------------------------------
-  //  Arithmetic operations
+  // Serialization
   // ----------------------------------------------------------------------------
 
-  [[nodiscard]] constexpr Quantity operator+(const Quantity& other) const noexcept {
-    assert(value_ <= INT64_MAX - other.value_);
-    return Quantity{value_ + other.value_};
-  }
-  [[nodiscard]] constexpr Quantity operator-(const Quantity& other) const noexcept {
-    assert(value_ >= other.value_);
-    return Quantity{value_ - other.value_};
-  }
-
-  [[nodiscard]] constexpr Quantity operator*(const int64_t scalar) const noexcept {
-    assert(scalar >= 0);
-    assert(scalar == 0 || value_ <= INT64_MAX / scalar);
-    return Quantity{value_ * scalar};
-  }
-
-  [[nodiscard]] constexpr Quantity operator/(int64_t divisor) const noexcept {
-    assert(divisor != 0);
-    return Quantity{value_ / divisor};
-  }
-
-  constexpr Quantity& operator+=(const Quantity& rhs) noexcept {
-    value_ += rhs.value_;
-    return *this;
-  }
-  constexpr Quantity& operator-=(const Quantity& rhs) noexcept {
-    value_ -= rhs.value_;
-    return *this;
-  }
-
-  // ----------------------------------------------------------------------------
-  // Special values
-  // ----------------------------------------------------------------------------
-
-  static constexpr Quantity zero() noexcept { return Quantity{0}; }
-  static constexpr Quantity max() noexcept { return Quantity{std::numeric_limits<int64_t>::max()}; }
-  static constexpr Quantity min() noexcept { return Quantity{0}; }
+  std::string to_string() const { return fmt::format("Price({})", to_double()); }
 };
 
-class OrderId {
+class Quantity : public FixedPoint<Quantity, 1> {
  private:
-  uint64_t value_;
+  explicit constexpr Quantity(int64_t value) noexcept : FixedPoint(value) {}
 
-  explicit constexpr OrderId(uint64_t value) noexcept : value_(value) {}
-
+ protected:
  public:
-  // ======================
-  // Named Constructors
-  // ======================
-  static constexpr OrderId from_value(uint64_t value) noexcept { return OrderId{value}; }
+  // ----------------------------------------------------------------------------
+  // Constructors & Factory Methods
+  // ----------------------------------------------------------------------------
 
-  // ======================
-  // 特殊值
-  // ======================
-  static constexpr OrderId invalid() noexcept { return OrderId{0}; }
+  constexpr Quantity() noexcept = default;
 
-  // ======================
-  // 取值函數
-  // ======================
-  [[nodiscard]] constexpr uint64_t value() const noexcept { return value_; }
+  static constexpr Quantity from(int64_t value) noexcept { return Quantity{value}; }
 
-  // ======================
-  // 比較函數
-  // ======================
-  [[nodiscard]] constexpr bool operator==(const OrderId& other) const noexcept {
-    return value_ == other.value_;
-  }
+  // ----------------------------------------------------------------------------
+  // Queries
+  // ----------------------------------------------------------------------------
 
-  [[nodiscard]] constexpr bool operator!=(const OrderId& other) const noexcept {
-    return value_ != other.value_;
-  }
+  /// @brief 數量數值
+  ///
+  /// @return 數量數值以整數表示
+  [[nodiscard]] constexpr int64_t value() const noexcept { return raw(); }
 
-  // ======================
-  // 檢查函數
-  // ======================
-  [[nodiscard]] constexpr bool is_valid() const noexcept { return value_ != 0; }
+  // ----------------------------------------------------------------------------
+  // Serialization
+  // ----------------------------------------------------------------------------
+
+  std::string to_string() const { return fmt::format("Quantity({})", value()); }
 };
 
-/// @brief 交易方向
-enum class Side : uint8_t { Buy = 0, Sell = 1 };
+/// @brief 檔位價量
+struct PriceLevel {
+  Price price;
+  Quantity size;
+};
 
-inline constexpr Side opposite(Side s) noexcept {
-  return (s == Side::Buy) ? Side::Sell : Side::Buy;
-}
-
-inline constexpr const char* to_string(Side s) noexcept {
-  switch (s) {
-    case Side::Buy:
-      return "Buy";
-    case Side::Sell:
-      return "Sell";
-  }
-  return "Unknown";
-}
-
-inline constexpr std::optional<Side> from_string(const std::string_view s) {
-  // 這邊為了效率這樣寫
-  if (s == "Buy" || s == "buy" || s == "BUY") return Side::Buy;
-  if (s == "Sell" || s == "sell" || s == "SELL") return Side::Sell;
-  return std::nullopt;
-}
+// class OrderId {
+//  private:
+//   uint64_t value_;
+//
+//   explicit constexpr OrderId(uint64_t value) noexcept : value_(value) {}
+//
+//  public:
+//   // ======================
+//   // Named Constructors
+//   // ======================
+//   static constexpr OrderId from_value(uint64_t value) noexcept { return OrderId{value}; }
+//
+//   // ======================
+//   // 特殊值
+//   // ======================
+//   static constexpr OrderId invalid() noexcept { return OrderId{0}; }
+//
+//   // ======================
+//   // 取值函數
+//   // ======================
+//   [[nodiscard]] constexpr uint64_t value() const noexcept { return value_; }
+//
+//   // ======================
+//   // 比較函數
+//   // ======================
+//   [[nodiscard]] constexpr bool operator==(const OrderId& other) const noexcept {
+//     return value_ == other.value_;
+//   }
+//
+//   [[nodiscard]] constexpr bool operator!=(const OrderId& other) const noexcept {
+//     return value_ != other.value_;
+//   }
+//
+//   // ======================
+//   // 檢查函數
+//   // ======================
+//   [[nodiscard]] constexpr bool is_valid() const noexcept { return value_ != 0; }
+// };
+//
+// /// @brief 交易方向
+// enum class Side : uint8_t { Buy = 0, Sell = 1 };
+//
+// inline constexpr Side opposite(Side s) noexcept {
+//   return (s == Side::Buy) ? Side::Sell : Side::Buy;
+// }
+//
+// inline constexpr const char* to_string(Side s) noexcept {
+//   switch (s) {
+//     case Side::Buy:
+//       return "Buy";
+//     case Side::Sell:
+//       return "Sell";
+//   }
+//   return "Unknown";
+// }
+//
+// inline constexpr std::optional<Side> from_string(const std::string_view s) {
+//   // 這邊為了效率這樣寫
+//   if (s == "Buy" || s == "buy" || s == "BUY") return Side::Buy;
+//   if (s == "Sell" || s == "sell" || s == "SELL") return Side::Sell;
+//   return std::nullopt;
+// }
 
 }  // namespace onyx::core
 
@@ -303,12 +282,12 @@ struct std::hash<onyx::core::Price> {
   }
 };
 
-template <>
-struct std::hash<onyx::core::OrderId> {
-  size_t operator()(const onyx::core::OrderId& id) const noexcept {
-    // std::hash 是 functor
-    return std::hash<uint64_t>{}(id.value());
-  }
-};
+// template <>
+// struct std::hash<onyx::core::OrderId> {
+//   size_t operator()(const onyx::core::OrderId& id) const noexcept {
+//     // std::hash 是 functor
+//     return std::hash<uint64_t>{}(id.value());
+//   }
+// };
 
 #endif

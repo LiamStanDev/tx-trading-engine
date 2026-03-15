@@ -11,7 +11,7 @@ target_sources(
     onyx-common
     PRIVATE
         ./src/error.cpp
-        ./src/core/type.cpp
+        ./src/core/order_book.cpp
         ./src/bench/latency_recorder.cpp
         ./src/io/socket_address.cpp
         ./src/io/socket.cpp
