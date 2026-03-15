@@ -122,7 +122,7 @@ std::optional<BookSnapshot> parse_i083(std::span<const std::byte> buffer,
   BookSnapshot snapshot{};
   std::memcpy(snapshot.prod_id.data(), fixed->prod_id, snapshot.prod_id.size());
   snapshot.prod_msg_seq = unpack_bcd(std::span(fixed->prod_msg_seq));
-  snapshot.is_simulated = fixed->calculated_flag == CalculatedFlag::Simulated;
+  snapshot.is_calculated = fixed->calculated_flag == CalculatedFlag::Simulated;
 
   // 查詢小數位數
   ProdIdKey prod_id_s;

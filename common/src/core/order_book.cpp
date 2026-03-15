@@ -10,6 +10,10 @@
 namespace onyx::core {
 
 void OrderBook::reset_from_snapshot(const BookSnapshot& snapshot) noexcept {
+  // NOTE: 試搓快照當前不太重要，目前只要開盤快照就好
+  if (snapshot.is_calculated) [[unlikely]] {
+    return;
+  }
   // -- 清空 --
   std::fill(std::begin(bids_), std::end(bids_), PriceLevel{});
   std::fill(std::begin(asks_), std::end(asks_), PriceLevel{});
@@ -21,13 +25,6 @@ void OrderBook::reset_from_snapshot(const BookSnapshot& snapshot) noexcept {
   std::memcpy(asks_.data(), snapshot.asks, sizeof(asks_));
   derived_bid_ = snapshot.derived_bid;
   derived_ask_ = snapshot.derived_ask;
-
-  // -- 更新狀態 --
-  if (snapshot.is_simulated) {
-    state_ = BookState::PreOpenSnapshot;  // 試撮快照
-  } else {
-    state_ = BookState::OpenSnapshot;  // 開盤快照
-  }
 }
 
 const PriceLevel& OrderBook::bid(uint8_t level) const noexcept { return bids_[level]; }
@@ -35,10 +32,6 @@ const PriceLevel& OrderBook::bid(uint8_t level) const noexcept { return bids_[le
 const PriceLevel& OrderBook::ask(uint8_t level) const noexcept { return asks_[level]; }
 
 void OrderBook::apply_update(const BookUpdate& update) noexcept {
-  if (state_ != BookState::ContinuousTrading) {
-    return;  // 忽略
-  }
-
   for (uint8_t i = 0; i < update.entry_count; ++i) {
     const BookUpdateEntry& entry = update.entries[i];
 
@@ -61,7 +54,7 @@ void OrderBook::apply_update(const BookUpdate& update) noexcept {
         }
         continue;
       default:
-        continue;  // WARNING: 未知類型跳過
+        continue;
     }
 
     switch (entry.action) {

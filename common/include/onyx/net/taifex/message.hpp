@@ -88,7 +88,7 @@ struct TradePacket {
 struct BookSnapshot {
   std::array<char, PROD_ID_LEN> prod_id;
   uint64_t prod_msg_seq;
-  bool is_simulated;            // true=試撮, false=開盤
+  bool is_calculated;           // true=試撮最後剩餘委託快照, false=開盤快照
   PriceLevel bids[BOOK_DEPTH];  // 買檔 1-5
   PriceLevel asks[BOOK_DEPTH];  // 賣檔 1-5
   PriceLevel derived_bid;       // 衍生買一檔（MD-ENTRY-TYPE='E'）

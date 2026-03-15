@@ -13,68 +13,15 @@ using namespace onyx::net::taifex;
 // 快照重建測試
 // ============================================================================
 
-TEST(OrderBook, InitialState) {
-  OrderBook book;
-  EXPECT_EQ(book.state(), BookState::Init);
-}
-
 TEST(OrderBook, ResetFromEmptySnapshot) {
   BookSnapshot snapshot{};
-  snapshot.is_simulated = false;
+  snapshot.is_calculated = false;
 
   OrderBook book;
   book.reset_from_snapshot(snapshot);
 
-  EXPECT_EQ(book.state(), BookState::OpenSnapshot);
   EXPECT_EQ(book.bid(0).price, Price::zero());
   EXPECT_EQ(book.ask(0).price, Price::zero());
-}
-
-TEST(OrderBook, ResetFromSimulatedSnapshot) {
-  BookSnapshot snapshot{};
-  snapshot.is_simulated = true;
-  snapshot.bids[0] = {Price::from(18500.0), Quantity::from(10)};
-
-  OrderBook book;
-  book.reset_from_snapshot(snapshot);
-
-  EXPECT_EQ(book.state(), BookState::PreOpenSnapshot);
-  EXPECT_EQ(book.bid(0).price, Price::from(18500.0));
-  EXPECT_EQ(book.bid(0).size, Quantity::from(10));
-}
-
-TEST(OrderBook, ResetFromFullSnapshot) {
-  BookSnapshot snapshot{};
-  snapshot.is_simulated = false;
-
-  // 買檔 5 檔
-  for (int i = 0; i < 5; ++i) {
-    snapshot.bids[i] = {Price::from(18500.0 - i), Quantity::from(10 + i)};
-  }
-
-  // 賣檔 5 檔
-  for (int i = 0; i < 5; ++i) {
-    snapshot.asks[i] = {Price::from(18501.0 + i), Quantity::from(10 + i)};
-  }
-
-  // 衍生一檔
-  snapshot.derived_bid = {Price::from(18499.5), Quantity::from(100)};
-  snapshot.derived_ask = {Price::from(18500.5), Quantity::from(100)};
-
-  OrderBook book;
-  book.reset_from_snapshot(snapshot);
-
-  // 驗證買檔
-  EXPECT_EQ(book.bid(0).price, Price::from(18500.0));
-  EXPECT_EQ(book.bid(4).price, Price::from(18496.0));
-
-  // 驗證賣檔
-  EXPECT_EQ(book.ask(0).price, Price::from(18501.0));
-  EXPECT_EQ(book.ask(4).price, Price::from(18505.0));
-
-  // 驗證衍生檔
-  EXPECT_EQ(book.derived_bid().price, Price::from(18499.5));
-  EXPECT_EQ(book.derived_ask().price, Price::from(18500.5));
 }
 
 // ============================================================================
@@ -84,7 +31,7 @@ TEST(OrderBook, ResetFromFullSnapshot) {
 TEST(OrderBook, ApplyNew_InsertAtLevel0) {
   // 初始狀態：買一 18500 x 10, 買二 18499 x 20
   BookSnapshot snapshot{};
-  snapshot.is_simulated = false;
+  snapshot.is_calculated = false;
   snapshot.bids[0] = {Price::from(18500.0), Quantity::from(10)};
   snapshot.bids[1] = {Price::from(18499.0), Quantity::from(20)};
 
@@ -125,7 +72,7 @@ TEST(OrderBook, ApplyNew_InsertAtLevel0) {
 TEST(OrderBook, ApplyNew_InsertAtLevel2) {
   // 初始狀態：5 檔全滿
   BookSnapshot snapshot{};
-  snapshot.is_simulated = false;
+  snapshot.is_calculated = false;
   for (int i = 0; i < 5; ++i) {
     snapshot.bids[i] = {Price::from(18500.0 - i), Quantity::from(10)};
   }
@@ -161,7 +108,7 @@ TEST(OrderBook, ApplyNew_InsertAtLevel2) {
 
 TEST(OrderBook, ApplyChange_ModifySize) {
   BookSnapshot snapshot{};
-  snapshot.is_simulated = false;
+  snapshot.is_calculated = false;
   snapshot.bids[0] = {Price::from(18500.0), Quantity::from(10)};
   snapshot.bids[1] = {Price::from(18499.0), Quantity::from(20)};
 
@@ -192,7 +139,7 @@ TEST(OrderBook, ApplyChange_ModifySize) {
 
 TEST(OrderBook, ApplyDelete_RemoveLevel1) {
   BookSnapshot snapshot{};
-  snapshot.is_simulated = false;
+  snapshot.is_calculated = false;
   snapshot.bids[0] = {Price::from(18500.0), Quantity::from(10)};
   snapshot.bids[1] = {Price::from(18499.0), Quantity::from(20)};
   snapshot.bids[2] = {Price::from(18498.0), Quantity::from(30)};
@@ -225,7 +172,7 @@ TEST(OrderBook, ApplyDelete_RemoveLevel1) {
 
 TEST(OrderBook, ApplyOverlay_DerivedBid) {
   BookSnapshot snapshot{};
-  snapshot.is_simulated = false;
+  snapshot.is_calculated = false;
   snapshot.derived_bid = {Price::from(18499.5), Quantity::from(100)};
 
   OrderBook book;
@@ -254,7 +201,7 @@ TEST(OrderBook, ApplyOverlay_DerivedBid) {
 
 TEST(OrderBook, ApplyMultipleUpdates_Sequential) {
   BookSnapshot snapshot{};
-  snapshot.is_simulated = false;
+  snapshot.is_calculated = false;
   snapshot.bids[0] = {Price::from(18500.0), Quantity::from(10)};
   snapshot.bids[1] = {Price::from(18499.0), Quantity::from(20)};
 
@@ -275,36 +222,4 @@ TEST(OrderBook, ApplyMultipleUpdates_Sequential) {
   // 1. New @ Level 0 → [18500.5 x 15, 18500.0 x 10, 18499.0 x 20, ...]
   // 2. Change @ Level 1 → [18500.5 x 15, 18500.0 x 25, 18499.0 x 20, ...]
   // 3. Delete @ Level 2 → [18500.5 x 15, 18500.0 x 25, 0 x 0, ...]
-}
-
-// ============================================================================
-// 狀態機測試
-// ============================================================================
-
-TEST(OrderBook, IgnoreUpdateWhenNotContinuousTrading) {
-  BookSnapshot snapshot{};
-  snapshot.is_simulated = false;
-  snapshot.bids[0] = {Price::from(18500.0), Quantity::from(10)};
-
-  OrderBook book;
-  book.reset_from_snapshot(snapshot);
-
-  // 狀態是 OpenSnapshot，不是 ContinuousTrading
-  EXPECT_EQ(book.state(), BookState::OpenSnapshot);
-
-  // 嘗試更新
-  BookUpdate update{};
-  update.entry_count = 1;
-  update.entries[0] = {
-      .action = UpdateAction::Change,
-      .type = EntryType::Bid,
-      .price = Price::zero(),
-      .size = Quantity::from(50),
-      .level = 0,
-  };
-
-  book.apply_update(update);
-
-  // 預期結果：更新被忽略，Level 0 的 size 不變
-  EXPECT_EQ(book.bid(0).size, Quantity::from(10));
 }

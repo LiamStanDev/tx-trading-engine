@@ -9,17 +9,6 @@ namespace onyx::core {
 
 using namespace net::taifex;
 
-/// @brief 委託簿狀態
-enum class BookState : uint8_t {
-  Init,               ///< 初始狀態
-  WaitingRefData,     ///< 等待 I010
-  WatingOpen,         ///< 等待開盤
-  PreOpenSnapshot,    // 試撮快照已載入
-  OpenSnapshot,       // 開盤快照已載入
-  ContinuousTrading,  // 盤中連續交易
-  Closed,             // 收盤
-};
-
 using BookSide = std::array<PriceLevel, BOOK_DEPTH>;
 
 /// @brief 五檔委託簿
@@ -43,9 +32,6 @@ class OrderBook {
   // ----------------------------------------------------------------------------
   // 狀態查詢
   // ----------------------------------------------------------------------------
-
-  /// @brief 取得狀態
-  [[nodiscard]] BookState state() const noexcept { return state_; }
 
   /// @brief 取得買檔
   ///
@@ -71,7 +57,6 @@ class OrderBook {
   BookSide asks_;             ///< 賣檔
   PriceLevel derived_bid_{};  ///< 衍生買一檔
   PriceLevel derived_ask_{};  ///< 衍生賣一檔
-  BookState state_{BookState::Init};
 
  private:
   void apply_new(BookSide& side, uint8_t level, Price price, Quantity size) noexcept;

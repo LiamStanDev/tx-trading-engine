@@ -91,7 +91,7 @@ struct __attribute__((packed)) I083FixedPart {
   StandardHeader header;
   char prod_id[PROD_ID_LEN];       ///< X(20)
   uint8_t prod_msg_seq[5];         ///< [PACK BCD] 商品行情訊息流水號
-  CalculatedFlag calculated_flag;  ///< 試撮價格註記，1 表式撮示
+  CalculatedFlag calculated_flag;  ///< 試撮價格註記，'1' 表示試撮最後剩餘委託快照
   uint8_t no_md_entries;           ///< [PACK BCD] 變更檔數
 };
 
@@ -144,6 +144,38 @@ struct __attribute__((packed)) I081Footer {
 };
 
 static_assert(sizeof(I081Footer) == 3, "I081FixedPart should be 3");
+
+// ----------------------------------------------------------------------------
+// I140 系統訊息
+// ----------------------------------------------------------------------------
+
+/*
+ * 系統訊息依照 function_code 不同，有不同內容以市場狀態通知為例
+ * 其 function_code 為 302(收單), 304(開盤), 305(不可刪單), 306(收盤)
+ * 然後又按照 list_type 分為 1(對整個流程群組), 2(對契約), 3(對商品)
+ */
+
+struct __attribute__((packed)) I140Header {
+  StandardHeader header;
+  uint8_t function_code[2];  // [PACK BCD] e.g. 100, 200, 302 等
+};
+
+static_assert(sizeof(I140Header) == 21, "I140Header should be 21 bytes");
+
+struct __attribute__((packed)) I140FlowGroupStatus {
+  uint8_t list_type;   // [PACK BCD] 列表型別註記為 '1'
+  char reason;         // [PACK BCD] 原因碼（通常是空白）
+  uint8_t flow_group;  // [PACK BCD] 流程群組編號 (1-14)
+};
+
+static_assert(sizeof(I140FlowGroupStatus) == 3, "I140FlowGroupStatus should be 3 bytes");
+
+struct __attribute__((packed)) I140Footer {
+  char check_sum;
+  char terminal_code[2];  // 0D 0A
+};
+
+static_assert(sizeof(I140Footer) == 3, "I140Footer should be 3 bytes");
 
 }  // namespace onyx::net::taifex
 #endif

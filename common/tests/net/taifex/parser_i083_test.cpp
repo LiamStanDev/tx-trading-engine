@@ -114,7 +114,7 @@ TEST(Parser, ParseI083_SingleBidAsk) {
   EXPECT_EQ(snapshot.prod_id[2], 'F');
   EXPECT_EQ(snapshot.prod_id[3], ' ');
   EXPECT_EQ(snapshot.prod_msg_seq, 12345);
-  EXPECT_FALSE(snapshot.is_simulated);
+  EXPECT_FALSE(snapshot.is_calculated);
 
   EXPECT_DOUBLE_EQ(snapshot.bids[0].price.value(), 18500.50);
   EXPECT_EQ(snapshot.bids[0].size.value(), 10);
@@ -228,7 +228,7 @@ TEST(Parser, ParseI083_CalculatedFlag) {
   auto result = parse_i083(buffer, spec_table);
 
   ASSERT_TRUE(result);
-  EXPECT_TRUE(result->is_simulated);
+  EXPECT_TRUE(result->is_calculated);
 }
 
 // ----------------------------------------------------------------------------
