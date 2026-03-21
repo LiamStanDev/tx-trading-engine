@@ -33,7 +33,7 @@ Result<SocketAddress> SocketAddress::from(std::string_view ip, uint16_t port) no
   ip_buf[ip.size()] = '\0';  // 這樣比較快
   if (inet_pton(AF_INET, ip_buf, &addr.addr4_.sin_addr) != 1) {
     // 他有設定 errno 但是沒什麼用
-    return onyx::bail(std::errc::invalid_argument, "Invalid IPv4 format");
+    return onyx::fail(std::errc::invalid_argument, "Invalid IPv4 format");
   }
   return addr;
 }
@@ -42,7 +42,7 @@ Result<SocketAddress> SocketAddress::from(std::string_view address) noexcept {
   // 嘗試 IPv4
   auto colon_pos = address.find(':');
   if (colon_pos == std::string_view::npos) {
-    return onyx::bail(std::errc::invalid_argument, "Invalid port format");
+    return onyx::fail(std::errc::invalid_argument, "Invalid port format");
   }
 
   auto ip = address.substr(0, colon_pos);
@@ -52,12 +52,12 @@ Result<SocketAddress> SocketAddress::from(std::string_view address) noexcept {
   auto [ptr, ec] = std::from_chars(port_str.data(), port_str.data() + port_str.size(), port);
 
   if (ec != std::errc{}) {
-    return onyx::bail(std::errc::invalid_argument, "Port parse failed");
+    return onyx::fail(std::errc::invalid_argument, "Port parse failed");
   }
 
   // 檢查是否完全解析 (防止 "8080abc" 情況發生)
   if (ptr != port_str.data() + port_str.size()) {
-    return onyx::bail(std::errc::invalid_argument, "Port parse failed");
+    return onyx::fail(std::errc::invalid_argument, "Port parse failed");
   }
 
   return from(ip, port);

@@ -48,7 +48,7 @@ Result<MappedFile> MappedFile::from_file(File&& file, int prot, int flags, off_t
   void* addr = ::mmap(nullptr, map_length, prot, flags, file.fd(), offset);
 
   if (addr == MAP_FAILED) {
-    return onyx::wrap_errno(errno, "mmap() failed");
+    return onyx::fail(errno, "mmap() failed");
   }
 
   return MappedFile(std::move(file), addr, map_length, prot, flags, offset);

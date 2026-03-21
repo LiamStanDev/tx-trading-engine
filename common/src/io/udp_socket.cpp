@@ -4,6 +4,8 @@
 
 namespace onyx::io {
 
+UdpSocket::UdpSocket(Socket socket) noexcept : socket_(std::move(socket)) {}
+
 Result<UdpSocket> UdpSocket::create() noexcept {
   auto socket = TRY(Socket::create_udp());
 

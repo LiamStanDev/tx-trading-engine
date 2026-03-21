@@ -2,60 +2,37 @@
 
 #include <algorithm>
 #include <cstring>
+#include <source_location>
 
 #include "execinfo.h"
 
 namespace onyx {
 
-const ErrorContext& ErrorHandle::context() const noexcept {
-  return onyx::ErrorRegistry::get(*this);
-}
+const ErrorContext& ErrorToken::context() const noexcept { return onyx::ErrorRegistry::get(); }
 
-std::error_code ErrorHandle::ec() const noexcept { return context().ec; }
+std::error_code ErrorToken::ec() const noexcept { return context().ec; }
 
-std::string_view ErrorHandle::message() const noexcept { return context().message; }
+std::string ErrorToken::message() const noexcept { return context().message; }
 
 std::error_code make_error_code(int ev) noexcept { return {ev, std::generic_category()}; }
 
-ErrorHandle ErrorRegistry::capture_origin(std::error_code ec, std::string_view msg,
-                                          std::source_location loc) noexcept {
-  uint32_t id = head_++;
-  uint32_t slot = id % SIZE;
-  auto& ctx_slot = ctx_buffer_[slot];
-  auto& msg_slot = msg_buffer_[slot];
-
-  size_t msg_len = std::min(msg.length(), MSG_MAX_LEN);
-  if (msg_len > 0) {
-    std::memcpy(msg_slot.data(), msg.data(), msg_len);
-  }
-  msg_slot[msg_len] = '\0';
-  ctx_slot.message = msg_slot.data();
-
-  ctx_slot.ec = ec;
-  ctx_slot.location = loc;
-  ctx_slot.frame_count =
-      static_cast<uint8_t>(::backtrace(ctx_slot.stackframe, ErrorContext::MAX_FRAME_COUNT));
-  return ErrorHandle{id};
+ErrorToken ErrorRegistry::capture_fail(std::error_code ec, std::string_view msg,
+                                       std::source_location loc) noexcept {
+  ctx_.ec = ec;
+  ctx_.location = loc;
+  ctx_.frame_count =
+      static_cast<uint8_t>(::backtrace(ctx_.stackframe, ErrorContext::MAX_FRAME_COUNT));
+  ctx_.message = msg;
+  return ErrorToken{};
 }
 
-ErrorHandle ErrorRegistry::capture_origin_thin(std::error_code ec, std::string_view msg,
-                                               std::source_location loc) noexcept {
-  uint32_t id = head_++;
-  size_t slot = id % SIZE;
-  auto& ctx_slot = ctx_buffer_[slot];
-  auto& msg_slot = msg_buffer_[slot];
+ErrorToken ErrorRegistry::capture_flow(std::error_code ec, std::source_location loc) noexcept {
+  ctx_.ec = ec;
+  ctx_.location = loc;
+  ctx_.frame_count = 0;  // 不捕捉堆疊
+  ctx_.message.clear();
 
-  size_t msg_len = std::min(msg.length(), MSG_MAX_LEN);
-  if (msg_len > 0) {
-    std::memcpy(msg_slot.data(), msg.data(), msg_len);
-  }
-  msg_slot[msg_len] = '\0';
-  ctx_slot.message = msg_slot.data();
-
-  ctx_slot.ec = ec;
-  ctx_slot.location = loc;
-  ctx_slot.frame_count = 0;  // 不捕捉堆疊
-  return ErrorHandle{id};
+  return ErrorToken{};
 }
 
 }  // namespace onyx

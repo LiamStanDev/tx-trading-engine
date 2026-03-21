@@ -103,7 +103,7 @@ TEST(SharedMemoryTest, InvalidName) {
 
   auto ctx = result.error().context();
   EXPECT_EQ(ctx, std::errc::invalid_argument);
-  EXPECT_STREQ(ctx.message, "SHM should start with '/'");
+  EXPECT_EQ(ctx.message, "SHM should start with '/'");
 }
 
 TEST(SharedMemoryTest, ZeroSize) {
@@ -115,7 +115,7 @@ TEST(SharedMemoryTest, ZeroSize) {
 
   auto ctx = result.error().context();
   EXPECT_EQ(ctx, std::errc::invalid_argument);
-  EXPECT_STREQ(ctx.message, "Invalid size");
+  EXPECT_EQ(ctx.message, "Invalid size");
 }
 
 // ============================================================================

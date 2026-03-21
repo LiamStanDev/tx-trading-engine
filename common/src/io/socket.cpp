@@ -63,7 +63,7 @@ Result<> Socket::listen(int backlog) noexcept {
   }
 
   if (::listen(fd_, backlog) < 0) {
-    return onyx::wrap_errno(errno, "listen() failed");
+    return onyx::fail(errno, "listen() failed");
   }
 
   return {};
@@ -75,21 +75,27 @@ Result<Socket> Socket::accept(SocketAddress* client_addr) noexcept {
   }
 
   int client_fd;
+  sockaddr* addr_ptr = nullptr;
+  socklen_t* len_ptr = nullptr;
 
   if (client_addr) {
-    do {
-      client_fd = ::accept(fd_, client_addr->raw(), client_addr->length_ptr());
-    } while (client_fd < 0 && errno == EINTR);
-  } else {
-    do {
-      client_fd = ::accept(fd_, nullptr, nullptr);
-    } while (client_fd < 0 && errno == EINTR);
-  }
-  if (client_fd < 0) {
-    return onyx::wrap_errno(errno, "accept() failed");
+    addr_ptr = client_addr->raw();
+    len_ptr = client_addr->length_ptr();
   }
 
-  return Socket(client_fd);
+  do {
+    client_fd = ::accept(fd_, addr_ptr, len_ptr);
+  } while (client_fd < 0 && errno == EINTR);
+
+  if (client_fd >= 0) {
+    return Socket(client_fd);
+  }
+
+  if (errno == EAGAIN) {
+    return onyx::bail(errno);
+  }
+
+  return onyx::fail(errno, "accept() failed");
 }
 
 Result<> Socket::connect(const SocketAddress& addr) noexcept {
@@ -102,10 +108,15 @@ Result<> Socket::connect(const SocketAddress& addr) noexcept {
     ret = ::connect(fd_, addr.raw(), addr.length());
   } while (ret < 0 && errno == EINTR);
 
-  if (ret < 0) {
-    return onyx::wrap_errno(errno, "connect() failed");
+  if (ret >= 0) {
+    return {};
   }
-  return {};
+
+  if (errno == EAGAIN) {
+    return onyx::bail(errno);
+  }
+
+  return onyx::fail(errno, "connect() failed");
 }
 
 Result<> Socket::set_nonblocking(bool enable) noexcept {
@@ -152,11 +163,15 @@ Result<size_t> Socket::send(std::span<const std::byte> data) noexcept {
     n = ::send(fd_, data.data(), data.size(), 0);
   } while (n < 0 && errno == EINTR);
 
-  if (n < 0) {
-    return onyx::wrap_errno(errno);
+  if (n >= 0) {
+    return static_cast<size_t>(n);
   }
 
-  return static_cast<size_t>(n);
+  if (errno == EAGAIN) {
+    return onyx::bail(errno);
+  }
+
+  return onyx::fail(errno, "send() failed");
 }
 
 Result<size_t> Socket::recv(std::span<std::byte> buffer) noexcept {
@@ -169,11 +184,15 @@ Result<size_t> Socket::recv(std::span<std::byte> buffer) noexcept {
     n = ::recv(fd_, buffer.data(), buffer.size(), 0);
   } while (n < 0 && errno == EINTR);
 
-  if (n < 0) {
-    return onyx::wrap_errno(errno);
+  if (n >= 0) {
+    return static_cast<size_t>(n);
   }
 
-  return static_cast<size_t>(n);
+  if (errno == EAGAIN) {
+    return onyx::bail(errno);
+  }
+
+  return onyx::fail(errno, "recv() failed");
 }
 
 Result<size_t> Socket::sendto(std::span<const std::byte> data, const SocketAddress& dest) noexcept {
@@ -187,12 +206,16 @@ Result<size_t> Socket::sendto(std::span<const std::byte> data, const SocketAddre
     n = ::sendto(fd_, data.data(), data.size(), 0, dest.raw(), dest.length());
   } while (n < 0 && errno == EINTR);
 
-  if (n < 0) {
-    return onyx::fail(errno, "sendto() failed");
+  if (n >= 0) {
+    // UDP 無流量控制,通常為全部發送不然就是失敗
+    return static_cast<size_t>(n);
   }
 
-  // UDP 無流量控制,通常為全部發送不然就是失敗
-  return static_cast<size_t>(n);
+  if (errno == EAGAIN) {
+    return onyx::bail(errno);
+  }
+
+  return onyx::fail(errno, "sendto() failed");
 }
 
 Result<size_t> Socket::recvfrom(std::span<std::byte> buffer, SocketAddress* src) noexcept {
@@ -213,11 +236,15 @@ Result<size_t> Socket::recvfrom(std::span<std::byte> buffer, SocketAddress* src)
     } while (n < 0 && errno == EINTR);
   }
 
-  if (n < 0) {
-    return onyx::wrap_errno(errno, "recvfrom() failed");
+  if (n >= 0) {
+    return static_cast<size_t>(n);
   }
 
-  return static_cast<size_t>(n);
+  if (errno == EAGAIN) {
+    return onyx::bail(errno);
+  }
+
+  return onyx::fail(errno, "recvfrom() failed");
 }
 
 Result<> Socket::set_reuseaddr(bool enable) noexcept {
@@ -260,18 +287,18 @@ Result<> Socket::join_multicast_group(const SocketAddress& multicast_addr,
 
   const auto* mcast_in_addr = multicast_addr.addr_ptr();
   if (!mcast_in_addr) {
-    return onyx::bail(std::errc::invalid_argument, "Invalid multicast address");
+    return onyx::fail(std::errc::invalid_argument, "Invalid multicast address");
   }
 
   // 驗證 Multicast 地址範圍（224.0.0.0 ~ 239.255.255.255）
   uint32_t addr_host = ntohl(mcast_in_addr->s_addr);
   if (addr_host < 0xE0000000 || addr_host > 0xEFFFFFFF) {
-    return onyx::bail(std::errc::invalid_argument, "Invalid multicast address");
+    return onyx::fail(std::errc::invalid_argument, "Invalid multicast address");
   }
 
   const auto* iface_in_addr = interface_addr.addr_ptr();
   if (!iface_in_addr) {
-    return onyx::bail(std::errc::invalid_argument, "Invalid interface address");
+    return onyx::fail(std::errc::invalid_argument, "Invalid interface address");
   }
 
   struct ip_mreq mreq{};
@@ -365,7 +392,7 @@ Result<SocketAddress> Socket::local_address() const noexcept {
 
   SocketAddress addr;
   if (::getsockname(fd_, addr.raw(), addr.length_ptr()) < 0) {
-    return onyx::wrap_errno(errno, "getsockname() failed");
+    return onyx::fail(errno, "getsockname() failed");
   }
   return addr;
 }
@@ -377,7 +404,7 @@ Result<SocketAddress> Socket::remote_address() const noexcept {
 
   SocketAddress addr;
   if (::getpeername(fd_, addr.raw(), addr.length_ptr()) < 0) {
-    return onyx::wrap_errno(errno, "getpeername() failed");
+    return onyx::fail(errno, "getpeername() failed");
   }
   return addr;
 }

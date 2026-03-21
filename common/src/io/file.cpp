@@ -66,7 +66,7 @@ Result<size_t> File::read(std::span<std::byte> buffer) noexcept {
   } while (n < 0 && errno == EINTR);
 
   if (n < 0) {
-    return onyx::wrap_errno(errno);
+    return onyx::fail(errno);
   }
 
   return static_cast<size_t>(n);
@@ -83,7 +83,7 @@ Result<size_t> File::write(std::span<const std::byte> data) noexcept {
   } while (n < 0 && errno == EINTR);
 
   if (n < 0) {
-    return onyx::wrap_errno(errno);
+    return onyx::fail(errno);
   }
 
   return static_cast<size_t>(n);
@@ -104,7 +104,7 @@ Result<size_t> File::pread(std::span<std::byte> buffer, off_t offset) noexcept {
   } while (n < 0 && errno == EINTR);
 
   if (n < 0) {
-    return onyx::wrap_errno(errno, "pread() failed");
+    return onyx::fail(errno, "pread() failed");
   }
 
   return static_cast<size_t>(n);
@@ -125,7 +125,7 @@ Result<size_t> File::pwrite(std::span<const std::byte> data, off_t offset) noexc
   } while (n < 0 && errno == EINTR);
 
   if (n < 0) {
-    return onyx::wrap_errno(errno, "pwrite() failed");
+    return onyx::fail(errno, "pwrite() failed");
   }
 
   return static_cast<size_t>(n);
@@ -143,7 +143,7 @@ Result<size_t> File::pwrite(std::span<const std::byte> data, off_t offset) noexc
   off_t new_pos = ::lseek(fd_, offset, static_cast<int>(whence));
 
   if (new_pos < 0) {
-    return onyx::wrap_errno(errno);
+    return onyx::fail(errno);
   }
 
   return new_pos;
@@ -167,7 +167,7 @@ Result<> File::sync() noexcept {
   }
 
   if (::fsync(fd_) < 0) {
-    return onyx::wrap_errno(errno, "fsync() failed");
+    return onyx::fail(errno, "fsync() failed");
   }
 
   return {};
@@ -179,7 +179,7 @@ Result<> File::datasync() noexcept {
   }
 
   if (::fdatasync(fd_) < 0) {
-    return onyx::wrap_errno(errno, "fdatasync() failed");
+    return onyx::fail(errno, "fdatasync() failed");
   }
 
   return {};
@@ -196,7 +196,7 @@ Result<> File::datasync() noexcept {
 
   struct stat st{};
   if (::fstat(fd_, &st) < 0) {
-    return onyx::wrap_errno(errno, "fstat() failed");
+    return onyx::fail(errno, "fstat() failed");
   }
 
   return static_cast<size_t>(st.st_size);
@@ -208,7 +208,7 @@ Result<> File::resize(size_t new_size) noexcept {
   }
 
   if (::ftruncate(fd_, static_cast<off_t>(new_size)) < 0) {
-    return onyx::wrap_errno(errno, "ftruncate() failed");
+    return onyx::fail(errno, "ftruncate() failed");
   }
 
   return {};
@@ -227,7 +227,7 @@ Result<> File::advise(Advise advise, off_t offset, size_t length) noexcept {
   int ret = ::posix_fadvise(fd_, offset, static_cast<off_t>(length), static_cast<int>(advise));
 
   if (ret != 0) {  // 成功返回 0
-    return onyx::wrap_errno(ret, "posix_fadvise() failed");
+    return onyx::fail(ret, "posix_fadvise() failed");
   }
 
   return {};
@@ -246,7 +246,7 @@ Result<> File::read_exact(std::span<std::byte> buffer) noexcept {
   while (total_read < buffer.size()) {
     size_t n = TRY(read(buffer.subspan(total_read)));
     if (n == 0) {
-      return onyx::bail(std::errc::no_message_available, "Unexpected EOF");
+      return onyx::fail(std::errc::no_message_available, "Unexpected EOF");
     }
     total_read += n;
   }

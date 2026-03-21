@@ -375,7 +375,7 @@ TEST(FileTest, PreadWithNegativeOffset_ReturnsError) {
   auto result = file.pread(buffer, -1);
   auto& ctx = result.error().context();
   EXPECT_EQ(ctx, std::errc::invalid_argument);
-  EXPECT_STREQ(ctx.message, "Invalid offset");
+  EXPECT_EQ(ctx.message, "Invalid offset");
 }
 
 TEST(FileTest, PwriteWithNegativeOffset_ReturnsError) {
@@ -389,7 +389,7 @@ TEST(FileTest, PwriteWithNegativeOffset_ReturnsError) {
 
   auto& ctx = result.error().context();
   EXPECT_EQ(ctx, std::errc::invalid_argument);
-  EXPECT_STREQ(ctx.message, "Invalid offset");
+  EXPECT_EQ(ctx.message, "Invalid offset");
 }
 
 TEST(FileTest, ConcurrentPreadPwrite_ThreadSafe) {

@@ -5,271 +5,329 @@
 #include <cerrno>
 #include <string>
 #include <system_error>
+#include <thread>
 
 namespace {
-// Helpers to simulate operations
-onyx::Result<int> trigger_fail(int ev) { return onyx::fail(ev, "Fail Triggered"); }
 
-onyx::Result<int> trigger_bail(int ev) { return onyx::bail(ev, "Bail Triggered"); }
+onyx::Result<int> trigger_fail(int ev, std::string_view msg = "Fail Triggered") {
+  return onyx::fail(ev, msg);
+}
 
-onyx::Result<int> trigger_wrap(int ev) { return onyx::wrap_errno(ev, "Wrap Triggered"); }
+onyx::Result<int> trigger_bail(int ev) { return onyx::bail(ev); }
+
+// 多層 TRY 傳播鏈
+onyx::Result<int> layer_c() { return onyx::fail(EINVAL, "deep error"); }
+onyx::Result<int> layer_b() { return TRY(layer_c()); }
+onyx::Result<int> layer_a() { return TRY(layer_b()); }
 
 }  // namespace
 
-class ErrorSystemTest : public ::testing::Test {};
+// ============================================================================
+// ErrorToken 基本屬性
+// ============================================================================
 
-// 1. Test Classification Logic
-TEST_F(ErrorSystemTest, ClassifyErrnoPolicy) {
-  using onyx::ErrorStrategy;
+TEST(ErrorTokenTest, IsSingleByte) { EXPECT_EQ(sizeof(onyx::ErrorToken), 1u); }
 
-  // Group 1: Flow Control -> Bail
-  EXPECT_EQ(onyx::classify_errno(EAGAIN), ErrorStrategy::Bail);
-#if EWOULDBLOCK != EAGAIN
-  EXPECT_EQ(onyx::classify_errno(EWOULDBLOCK), ErrorStrategy::Bail);
-#endif
-  EXPECT_EQ(onyx::classify_errno(EINTR), ErrorStrategy::Bail);
+// ============================================================================
+// fail() — 完整捕捉策略
+// ============================================================================
 
-  // Group 2: Async Connection -> Bail
-  EXPECT_EQ(onyx::classify_errno(EINPROGRESS), ErrorStrategy::Bail);
-  EXPECT_EQ(onyx::classify_errno(EALREADY), ErrorStrategy::Bail);
-  EXPECT_EQ(onyx::classify_errno(EISCONN), ErrorStrategy::Bail);
-
-  // Group 3: Network Lifecycle -> Bail
-  EXPECT_EQ(onyx::classify_errno(EPIPE), ErrorStrategy::Bail);
-  EXPECT_EQ(onyx::classify_errno(ECONNRESET), ErrorStrategy::Bail);
-  EXPECT_EQ(onyx::classify_errno(ETIMEDOUT), ErrorStrategy::Bail);
-
-  // Group 6: Critical Errors -> Fail
-  EXPECT_EQ(onyx::classify_errno(EBADF), ErrorStrategy::Fail);
-  EXPECT_EQ(onyx::classify_errno(EFAULT), ErrorStrategy::Fail);
-  EXPECT_EQ(onyx::classify_errno(EINVAL), ErrorStrategy::Fail);
-  EXPECT_EQ(onyx::classify_errno(ENOMEM), ErrorStrategy::Fail);
-  EXPECT_EQ(onyx::classify_errno(EADDRINUSE), ErrorStrategy::Fail);
-
-  // Default -> Fail
-  EXPECT_EQ(onyx::classify_errno(-1), ErrorStrategy::Fail);    // Unknown
-  EXPECT_EQ(onyx::classify_errno(9999), ErrorStrategy::Fail);  // Unknown
-}
-
-// 2. Test Fail Strategy
-TEST_F(ErrorSystemTest, FailCapturesStackTrace) {
+TEST(FailTest, CapturesErrorCode) {
   auto res = trigger_fail(EINVAL);
   ASSERT_FALSE(res.has_value());
-
-  // 透過物件方法 context() 取回 Context
-  const auto& ctx = res.error().context();
-  EXPECT_EQ(ctx.ec.value(), EINVAL);
-  EXPECT_GT(ctx.frame_count, 0);  // Should have frames
-  EXPECT_STREQ(ctx.message, "Fail Triggered");
+  EXPECT_EQ(res.error().context().ec.value(), EINVAL);
 }
 
-// 3. Test Bail Strategy
-TEST_F(ErrorSystemTest, BailSkipsStackTrace) {
+TEST(FailTest, CapturesStackTrace) {
+  auto res = trigger_fail(EINVAL);
+  ASSERT_FALSE(res.has_value());
+  EXPECT_GT(res.error().context().frame_count, 0);
+}
+
+TEST(FailTest, StoresMessage) {
+  auto res = trigger_fail(EINVAL, "my error message");
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().message, "my error message");
+}
+
+TEST(FailTest, EmptyMessageByDefault) {
+  onyx::Result<int> res = onyx::fail(EBADF);
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().message, "");
+}
+
+TEST(FailTest, CapturesSourceLocation) {
+  onyx::Result<int> res = onyx::fail(EINVAL, "loc test");
+  ASSERT_FALSE(res.has_value());
+  const auto& loc = res.error().context().location;
+  EXPECT_NE(std::string(loc.file_name()).find("error_test"), std::string::npos);
+  EXPECT_GT(loc.line(), 0u);
+}
+
+// ============================================================================
+// bail() — 輕量捕捉策略
+// ============================================================================
+
+TEST(BailTest, CapturesErrorCode) {
   auto res = trigger_bail(EAGAIN);
   ASSERT_FALSE(res.has_value());
-
-  const auto& ctx = res.error().context();
-  EXPECT_EQ(ctx.ec.value(), EAGAIN);
-  EXPECT_EQ(ctx.frame_count, 0);  // Should NOT have frames
-  EXPECT_STREQ(ctx.message, "Bail Triggered");
+  EXPECT_EQ(res.error().context().ec.value(), EAGAIN);
 }
 
-// 4. Test Wrap Errno (Auto Dispatch)
-TEST_F(ErrorSystemTest, WrapErrnoDispatch) {
-  // Case A: EAGAIN -> Bail
-  {
-    auto res = trigger_wrap(EAGAIN);
-    ASSERT_FALSE(res.has_value());
-    const auto& ctx = res.error().context();
-    EXPECT_EQ(ctx.frame_count, 0);  // Bail behavior
-  }
-
-  // Case B: EBADF -> Fail
-  {
-    auto res = trigger_wrap(EBADF);
-    ASSERT_FALSE(res.has_value());
-    const auto& ctx = res.error().context();
-    EXPECT_GT(ctx.frame_count, 0);  // Fail behavior
-  }
+TEST(BailTest, SkipsStackTrace) {
+  auto res = trigger_bail(EAGAIN);
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().frame_count, 0);
 }
 
-// 5. Overloads Coverage
-TEST_F(ErrorSystemTest, OverloadCoverage) {
-  // fail(std::errc)
-  {
-    auto res = onyx::fail(std::errc::address_in_use, "errc fail");
-    const auto& ctx = res.error().context();
-    EXPECT_EQ(ctx.ec, std::make_error_code(std::errc::address_in_use));
-    EXPECT_GT(ctx.frame_count, 0);
-  }
-
-  // fail(std::error_code)
-  {
-    auto ec = std::make_error_code(std::errc::io_error);
-    auto res = onyx::fail(ec, "ec fail");
-    const auto& ctx = res.error().context();
-    EXPECT_EQ(ctx.ec, ec);
-    EXPECT_GT(ctx.frame_count, 0);
-  }
-
-  // bail(std::errc)
-  {
-    auto res = onyx::bail(std::errc::operation_would_block, "errc bail");
-    const auto& ctx = res.error().context();
-    EXPECT_EQ(ctx.frame_count, 0);
-  }
-
-  // bail(std::error_code)
-  {
-    auto ec = std::make_error_code(std::errc::interrupted);
-    auto res = onyx::bail(ec, "ec bail");
-    const auto& ctx = res.error().context();
-    EXPECT_EQ(ctx.frame_count, 0);
-  }
+TEST(BailTest, ClearsMessage) {
+  // 先讓 fail 寫入訊息，再 bail，確認訊息被清空
+  (void)trigger_fail(EINVAL, "previous message");
+  auto res = trigger_bail(EAGAIN);
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().message, "");
 }
 
-// 6. Formatter Tests
-TEST_F(ErrorSystemTest, FormatterOutput) {
-  // Fail output (Deep)
-  auto res_fail = onyx::fail(EBADF, "Bad File");
-  // 利用新增的 fmt::formatter<onyx::ErrorHandle> 直接格式化 Handle
-  std::string deep_out = fmt::format("{}", res_fail.error());
-  EXPECT_NE(deep_out.find("[Error Diagnosis]"), std::string::npos);
-  EXPECT_NE(deep_out.find("Stack Trace:"), std::string::npos);
-  EXPECT_NE(deep_out.find("Bad File"), std::string::npos);
-
-  // Bail output (Thin)
-  auto res_bail = onyx::bail(EAGAIN, "Try Again");
-  std::string thin_out = fmt::format("{}", res_bail.error());
-  EXPECT_NE(thin_out.find("[Error Diagnosis]"), std::string::npos);
-  EXPECT_EQ(thin_out.find("Stack Trace:"),
-            std::string::npos);  // Should NOT appear
-  EXPECT_NE(thin_out.find("Try Again"), std::string::npos);
+TEST(BailTest, CapturesSourceLocation) {
+  onyx::Result<int> res = onyx::bail(EAGAIN);
+  ASSERT_FALSE(res.has_value());
+  const auto& loc = res.error().context().location;
+  EXPECT_NE(std::string(loc.file_name()).find("error_test"), std::string::npos);
+  EXPECT_GT(loc.line(), 0u);
 }
 
-// 7. Macro Tests
-TEST_F(ErrorSystemTest, MacroBehavior) {
-  // TRY success
-  auto success_func = []() -> onyx::Result<int> { return 42; };
-  auto try_test = [&]() -> onyx::Result<int> {
-    int val = TRY(success_func());
-    return val + 1;
+// ============================================================================
+// 多載覆蓋 (fail / bail × int / errc / error_code)
+// ============================================================================
+
+TEST(OverloadTest, FailWithInt) {
+  onyx::Result<int> res = onyx::fail(EBADF, "int overload");
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().ec.value(), EBADF);
+  EXPECT_GT(res.error().context().frame_count, 0);
+}
+
+TEST(OverloadTest, FailWithErrc) {
+  onyx::Result<int> res = onyx::fail(std::errc::address_in_use, "errc overload");
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().ec, std::make_error_code(std::errc::address_in_use));
+  EXPECT_GT(res.error().context().frame_count, 0);
+}
+
+TEST(OverloadTest, FailWithErrorCode) {
+  auto ec = std::make_error_code(std::errc::io_error);
+  onyx::Result<int> res = onyx::fail(ec, "error_code overload");
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().ec, ec);
+  EXPECT_GT(res.error().context().frame_count, 0);
+}
+
+TEST(OverloadTest, BailWithInt) {
+  onyx::Result<int> res = onyx::bail(EAGAIN);
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().ec.value(), EAGAIN);
+  EXPECT_EQ(res.error().context().frame_count, 0);
+}
+
+TEST(OverloadTest, BailWithErrc) {
+  onyx::Result<int> res = onyx::bail(std::errc::operation_would_block);
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().ec, std::make_error_code(std::errc::operation_would_block));
+  EXPECT_EQ(res.error().context().frame_count, 0);
+}
+
+TEST(OverloadTest, BailWithErrorCode) {
+  auto ec = std::make_error_code(std::errc::interrupted);
+  onyx::Result<int> res = onyx::bail(ec);
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().ec, ec);
+  EXPECT_EQ(res.error().context().frame_count, 0);
+}
+
+// ============================================================================
+// ErrorToken 便利方法
+// ============================================================================
+
+TEST(ErrorTokenMethodTest, EcReturnsCorrectValue) {
+  onyx::Result<int> res = onyx::fail(EPERM, "perm error");
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().ec().value(), EPERM);
+}
+
+TEST(ErrorTokenMethodTest, MessageReturnsCopy) {
+  onyx::Result<int> res = onyx::fail(EPERM, "token message");
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().message(), "token message");
+}
+
+// ============================================================================
+// 比較運算子
+// ============================================================================
+
+TEST(ComparisonTest, TokenEqualsErrorCode) {
+  onyx::Result<int> res = onyx::fail(EINVAL, "cmp");
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error(), onyx::make_error_code(EINVAL));
+  EXPECT_NE(res.error(), onyx::make_error_code(EAGAIN));
+}
+
+TEST(ComparisonTest, TokenEqualsErrc) {
+  onyx::Result<int> res = onyx::fail(std::errc::invalid_argument, "cmp errc");
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error(), std::errc::invalid_argument);
+  EXPECT_NE(res.error(), std::errc::operation_would_block);
+}
+
+TEST(ComparisonTest, ContextEqualsErrorCode) {
+  onyx::Result<int> res = onyx::fail(EINVAL, "ctx cmp");
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context(), onyx::make_error_code(EINVAL));
+}
+
+TEST(ComparisonTest, ContextEqualsErrc) {
+  onyx::Result<int> res = onyx::fail(std::errc::invalid_argument, "ctx cmp errc");
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context(), std::errc::invalid_argument);
+}
+
+// ============================================================================
+// 單槽覆寫語意 (Single Slot Semantics)
+// ============================================================================
+
+TEST(SingleSlotTest, LaterCallOverwritesPrevious) {
+  (void)trigger_fail(EINVAL, "first");
+  auto res = trigger_bail(EAGAIN);
+  EXPECT_EQ(res.error().context().ec.value(), EAGAIN);
+  EXPECT_EQ(res.error().context().frame_count, 0);
+}
+
+TEST(SingleSlotTest, RegistryGetReflectsLastCall) {
+  (void)trigger_fail(EBADF, "registry test");
+  EXPECT_EQ(onyx::ErrorRegistry::get().ec.value(), EBADF);
+
+  (void)trigger_bail(EAGAIN);
+  EXPECT_EQ(onyx::ErrorRegistry::get().ec.value(), EAGAIN);
+}
+
+// ============================================================================
+// make_error_code
+// ============================================================================
+
+TEST(MakeErrorCodeTest, ConvertFromErrno) {
+  auto ec = onyx::make_error_code(EINVAL);
+  EXPECT_EQ(ec.value(), EINVAL);
+  EXPECT_EQ(ec.category(), std::generic_category());
+}
+
+// ============================================================================
+// TRY / CHECK 宏
+// ============================================================================
+
+TEST(MacroTest, TrySuccessPropagatesValue) {
+  auto success = []() -> onyx::Result<int> { return 42; };
+  auto caller = [&]() -> onyx::Result<int> {
+    int v = TRY(success());
+    return v + 1;
   };
-  EXPECT_EQ(*try_test(), 43);
+  auto res = caller();
+  ASSERT_TRUE(res.has_value());
+  EXPECT_EQ(*res, 43);
+}
 
-  // TRY failure propagation
-  auto fail_func = []() -> onyx::Result<int> { return onyx::bail(EPIPE); };
-  auto try_fail_test = [&]() -> onyx::Result<int> {
-    int val = TRY(fail_func());
-    return val + 1;
+TEST(MacroTest, TryFailurePropagatesError) {
+  auto fail_fn = []() -> onyx::Result<int> { return onyx::bail(EPIPE); };
+  auto caller = [&]() -> onyx::Result<int> {
+    int v = TRY(fail_fn());
+    return v;
   };
-  auto res = try_fail_test();
+  auto res = caller();
   ASSERT_FALSE(res.has_value());
   EXPECT_EQ(res.error().context().ec.value(), EPIPE);
+}
 
-  // CHECK failure propagation
-  auto check_test = [&]() -> onyx::Result<> {
-    CHECK(fail_func());
+TEST(MacroTest, CheckFailurePropagatesError) {
+  auto fail_fn = []() -> onyx::Result<int> { return onyx::bail(ECONNRESET); };
+  auto caller = [&]() -> onyx::Result<> {
+    CHECK(fail_fn());
     return {};
   };
-  auto check_res = check_test();
-  ASSERT_FALSE(check_res.has_value());
-  EXPECT_EQ(check_res.error().context().ec.value(), EPIPE);
+  auto res = caller();
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().ec.value(), ECONNRESET);
 }
 
-// 8. RingBuffer Lifecycle & Expiration Protection
-TEST_F(ErrorSystemTest, RegistryRingBufferLifecycle) {
-  // 1. 驗證 RingBuffer 的核心價值：獨立保存多個錯誤不被覆蓋
-  auto res1 = onyx::fail(EINVAL, "First Error");
-  auto res2 = onyx::bail(EAGAIN, "Second Error");
-
-  // 即使發生了 Second Error, First Error 的 Handle 依然有效且準確！
-  const auto& ctx1 = res1.error().context();
-  EXPECT_EQ(ctx1.ec.value(), EINVAL);
-  EXPECT_STREQ(ctx1.message, "First Error");
-  EXPECT_GT(ctx1.frame_count, 0);
-
-  const auto& ctx2 = res2.error().context();
-  EXPECT_EQ(ctx2.ec.value(), EAGAIN);
-  EXPECT_STREQ(ctx2.message, "Second Error");
-  EXPECT_EQ(ctx2.frame_count, 0);
-
-  // 2. 驗證過期防禦機制 (Expiration Protection)
-  // 假設 SIZE = 16，我們產生 16 個新錯誤，把 head_ 往前推，覆蓋掉最舊的槽位
-  for (int i = 0; i < onyx::ErrorRegistry::SIZE; ++i) {
-    (void)onyx::bail(ENOENT, "Spam Error");
-  }
-
-  // 此時 res1 的 Handle 已經過期，context() 應該返回 EXPIRED_CONTEXT
-  const auto& expired_ctx = res1.error().context();
-  EXPECT_EQ(expired_ctx.ec, std::make_error_code(std::errc::state_not_recoverable));
-  EXPECT_STREQ(expired_ctx.message, "<EXPIRED ERROR HANDLE>");
+TEST(MacroTest, TryPropagatesThroughMultipleLayers) {
+  // layer_a → layer_b → layer_c (fail EINVAL)
+  // 每層只是 TRY 轉傳，最終錯誤應完整保留
+  auto res = layer_a();
+  ASSERT_FALSE(res.has_value());
+  EXPECT_EQ(res.error().context().ec.value(), EINVAL);
+  EXPECT_EQ(res.error().context().message, "deep error");
 }
 
-// 9. Test Message Truncation (Buffer Overflow Prevention)
-TEST_F(ErrorSystemTest, MessageTruncation) {
-  // 建立一個長度為大於預設的 MSG_MAX_LEN的超長字串
-  std::string huge_msg(onyx::ErrorRegistry::MSG_MAX_LEN + 10, 'A');
+// ============================================================================
+// 格式化輸出
+// ============================================================================
 
-  auto res = onyx::bail(EINVAL, huge_msg);
-
-  const auto& ctx = res.error().context();
-  std::string_view saved_msg = res.error().message();
-
-  // 驗證字串長度被精確截斷在 MSG_MAX_LEN
-  EXPECT_EQ(saved_msg.length(), onyx::ErrorRegistry::MSG_MAX_LEN);
-
-  // 驗證截斷後的內容都是 'A'，且確實以 '\0' 結尾
-  // (如果沒有正確 \0 結尾，string_view 或 strlen 的長度會超過)
-  EXPECT_EQ(saved_msg, std::string(onyx::ErrorRegistry::MSG_MAX_LEN, 'A'));
-  EXPECT_EQ(ctx.message[onyx::ErrorRegistry::MSG_MAX_LEN], '\0');
-  EXPECT_EQ(std::strlen(ctx.message), onyx::ErrorRegistry::MSG_MAX_LEN);
+TEST(FormatterTest, FailIncludesStackTrace) {
+  auto res = trigger_fail(EBADF, "Bad File");
+  std::string out = fmt::format("{}", res.error());
+  EXPECT_NE(out.find("[Error Diagnosis]"), std::string::npos);
+  EXPECT_NE(out.find("Stack Trace:"), std::string::npos);
+  EXPECT_NE(out.find("Bad File"), std::string::npos);
 }
 
-// 10. Test Empty Message Safety (Null Pointer Dereference Prevention)
-TEST_F(ErrorSystemTest, EmptyMessageHandling) {
-  // Case A: 傳入明確的空字串
-  auto res1 = onyx::bail(EAGAIN, "");
-  EXPECT_EQ(res1.error().message(), "");
-  EXPECT_STREQ(res1.error().context().message, "");  // C-string 比較
-
-  // Case B: 傳入預設建構的 string_view
-  auto res2 = onyx::fail(EBADF, std::string_view{});
-  EXPECT_EQ(res2.error().message(), "");
-  EXPECT_STREQ(res2.error().context().message, "");
+TEST(FormatterTest, BailExcludesStackTrace) {
+  auto res = trigger_bail(EAGAIN);
+  std::string out = fmt::format("{}", res.error());
+  EXPECT_NE(out.find("[Error Diagnosis]"), std::string::npos);
+  EXPECT_EQ(out.find("Stack Trace:"), std::string::npos);
+  // EAGAIN 的 strerror 描述應出現在輸出中
+  EXPECT_NE(out.find("Resource temporarily unavailable"), std::string::npos);
 }
 
-// 11. Test RingBuffer Stale State Overwrite
-TEST_F(ErrorSystemTest, StaleStateOverwrite) {
-  // 第一步：在目前的 Slot 寫入一個明顯的長字串
-  auto res_initial = onyx::bail(EAGAIN, "SUPER_LONG_STALE_MESSAGE_THAT_SHOULD_BE_OVERWRITTEN");
-  uint32_t initial_id = res_initial.error().id;
+TEST(FormatterTest, ContextFormatterDirectly) {
+  auto res = trigger_fail(ENOMEM, "OOM");
+  std::string out = fmt::format("{}", res.error().context());
+  EXPECT_NE(out.find("[Error Diagnosis]"), std::string::npos);
+  EXPECT_NE(out.find("OOM"), std::string::npos);
+}
 
-  // 第二步：產生 SIZE - 1 個錯誤，讓 RingBuffer 的 head_ 剛好繞回同一個 Slot
-  for (int i = 0; i < onyx::ErrorRegistry::SIZE - 1; ++i) {
-    (void)onyx::bail(EINTR, "Dummy");
-  }
+// ============================================================================
+// 空訊息邊界條件
+// ============================================================================
 
-  // 第三步：在同一個 Slot 觸發一個帶有「極短字串」的錯誤
-  auto res_overwrite_short = onyx::bail(EINVAL, "Short");
+TEST(EdgeCaseTest, BailAlwaysHasEmptyMessage) {
+  auto res = trigger_bail(EAGAIN);
+  EXPECT_EQ(res.error().message(), "");
+  EXPECT_EQ(res.error().context().message, "");
+}
 
-  // 確保確實繞回同一個 Slot (ID 差 16)
-  EXPECT_EQ(res_overwrite_short.error().id % 16, initial_id % 16);
+TEST(EdgeCaseTest, FailWithExplicitEmptyStringView) {
+  onyx::Result<int> res = onyx::fail(EBADF, std::string_view{});
+  EXPECT_EQ(res.error().message(), "");
+  EXPECT_EQ(res.error().context().message, "");
+}
 
-  // 驗證 1: 新字串必須是 "Short"
-  EXPECT_EQ(res_overwrite_short.error().message(), "Short");
-  // 驗證 2: 記憶體中不能殘留舊字串的尾巴 (例如 "Short_LONG_STALE...")
-  EXPECT_STREQ(res_overwrite_short.error().context().message, "Short");
+// ============================================================================
+// 執行緒隔離
+// ============================================================================
 
-  // 第四步：再繞一圈 (再產生 15 個 dummy)
-  for (int i = 0; i < 15; ++i) {
-    (void)onyx::bail(EINTR, "Dummy");
-  }
+TEST(ThreadTest, EachThreadHasIndependentSlot) {
+  // 主執行緒寫入 EINVAL
+  (void)trigger_fail(EINVAL, "main thread error");
+  int ec_main = onyx::ErrorRegistry::get().ec.value();
 
-  // 第五步：這次用「空字串」覆蓋
-  auto res_overwrite_empty = onyx::fail(EFAULT, "");
+  int ec_thread = 0;
+  std::thread t([&] {
+    // 子執行緒寫入 EAGAIN，不應影響主執行緒的 slot
+    (void)trigger_fail(EAGAIN, "thread error");
+    ec_thread = onyx::ErrorRegistry::get().ec.value();
+  });
+  t.join();
 
-  // 驗證空字串確實覆蓋了之前的內容，而不是印出舊字串
-  EXPECT_EQ(res_overwrite_empty.error().message(), "");
-  EXPECT_STREQ(res_overwrite_empty.error().context().message, "");
+  // 主執行緒 slot 未被子執行緒覆蓋
+  EXPECT_EQ(onyx::ErrorRegistry::get().ec.value(), ec_main);
+  EXPECT_EQ(ec_main, EINVAL);
+  EXPECT_EQ(ec_thread, EAGAIN);
 }
